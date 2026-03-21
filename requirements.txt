@@ -4,7 +4,7 @@ uvicorn[standard]==0.27.1
 
 # Database & ORM
 sqlmodel==0.0.37
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.11
 alembic==1.18.4
 
 # Validation & Settings
