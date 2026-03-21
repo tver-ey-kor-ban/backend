@@ -1,6 +1,14 @@
+from sqlmodel import Session, SQLModel, create_engine
+
+from app.core.config import settings
 import os
 from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.orm import sessionmaker
+engine = create_engine(settings.DATABASE_URL)
+
+
+def create_db_and_tables() -> None:
+
 
 # Get database URL from environment or use default
 DATABASE_URL = os.getenv(

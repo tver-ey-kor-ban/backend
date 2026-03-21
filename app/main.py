@@ -1,7 +1,10 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+from app.db.session import create_db_and_tables
 from app.db import init_db, get_session
 from app.api.v1.endpoints import auth
 from app.services.auth_service import AuthService
@@ -37,6 +40,8 @@ def create_default_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
     """Application lifespan events."""
     # Startup: Initialize database
     init_db()
