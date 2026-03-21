@@ -1,6 +1,10 @@
 echo "__pycache__/
 *.py[cod]
 .env
-venv/
+env/
 .pytest_cache/
 *.db" > .gitignore
+
+.qoder/
+.ruff_cache/
+alembic/
