@@ -13,7 +13,7 @@ pydantic-settings==2.13.1
 email-validator==2.1.0
 
 # Security & Utilities
-python-multipart==0.0.9
+python-multipart==0.0.22
 python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 
