@@ -1,6 +1,12 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 from sqlmodel import Field, SQLModel, Relationship
+
+if TYPE_CHECKING:
+    from app.models.shop import UserShop
+    from app.models.appointment import Appointment
+    from app.models.customer_vehicle import CustomerVehicle
+    from app.models.product_order import ProductOrder
 
 
 class UserBase(SQLModel):
@@ -23,7 +29,33 @@ class User(UserBase, table=True):
     updated_at: Optional[datetime] = None
     
     # Relationship to refresh tokens
-    refresh_tokens: list["RefreshToken"] = Relationship(back_populates="user")
+    refresh_tokens: List["RefreshToken"] = Relationship(back_populates="user")
+    # Relationship to shops (Owner/Mechanic)
+    user_shops: List["UserShop"] = Relationship(back_populates="user")
+    
+    @property
+    def owned_shops(self) -> List["UserShop"]:
+        """Get shops where user is owner."""
+        return [us for us in self.user_shops if us.role == "owner" and us.is_active]
+    
+    @property
+    def mechanic_shops(self) -> List["UserShop"]:
+        """Get shops where user is mechanic."""
+        return [us for us in self.user_shops if us.role == "mechanic" and us.is_active]
+    
+    @property
+    def customer_shops(self) -> List["UserShop"]:
+        """Get shops where user is customer."""
+        return [us for us in self.user_shops if us.role == "customer" and us.is_active]
+    
+    # Relationship to appointments
+    appointments: List["Appointment"] = Relationship(back_populates="customer")
+    
+    # Relationship to customer vehicles
+    vehicles: List["CustomerVehicle"] = Relationship(back_populates="customer")
+    
+    # Relationship to product orders
+    product_orders: List["ProductOrder"] = Relationship(back_populates="customer")
 
 
 class UserCreate(UserBase):

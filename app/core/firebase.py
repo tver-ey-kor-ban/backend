@@ -3,15 +3,23 @@ import os
 import json
 from typing import Optional
 
-import firebase_admin
-from firebase_admin import credentials, auth
-from firebase_admin.auth import UserRecord
+try:
+    import firebase_admin
+    from firebase_admin import credentials, auth
+    from firebase_admin.auth import UserRecord
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    FIREBASE_AVAILABLE = False
+    firebase_admin = None
+    credentials = None
+    auth = None
+    UserRecord = None
 
 # Global Firebase app instance
-_firebase_app: Optional[firebase_admin.App] = None
+_firebase_app: Optional = None
 
 
-def initialize_firebase() -> firebase_admin.App:
+def initialize_firebase():
     """Initialize Firebase Admin SDK.
     
     Looks for Firebase credentials in the following order:
@@ -20,6 +28,9 @@ def initialize_firebase() -> firebase_admin.App:
     3. firebase-credentials.json file in project root
     """
     global _firebase_app
+    
+    if not FIREBASE_AVAILABLE:
+        return None
     
     if _firebase_app is not None:
         return _firebase_app
@@ -50,6 +61,8 @@ def initialize_firebase() -> firebase_admin.App:
 
 def get_firebase_auth():
     """Get Firebase Auth client."""
+    if not FIREBASE_AVAILABLE:
+        return None
     if _firebase_app is None:
         initialize_firebase()
     return auth
@@ -64,15 +77,19 @@ def verify_firebase_token(token: str) -> Optional[dict]:
     Returns:
         Decoded token payload or None if invalid
     """
+    if not FIREBASE_AVAILABLE:
+        return None
     try:
         firebase_auth = get_firebase_auth()
+        if firebase_auth is None:
+            return None
         decoded_token = firebase_auth.verify_id_token(token)
         return decoded_token
     except Exception:
         return None
 
 
-def get_firebase_user(uid: str) -> Optional[UserRecord]:
+def get_firebase_user(uid: str):
     """Get Firebase user by UID.
     
     Args:
@@ -81,8 +98,12 @@ def get_firebase_user(uid: str) -> Optional[UserRecord]:
     Returns:
         UserRecord or None if not found
     """
+    if not FIREBASE_AVAILABLE:
+        return None
     try:
         firebase_auth = get_firebase_auth()
+        if firebase_auth is None:
+            return None
         return firebase_auth.get_user(uid)
     except Exception:
         return None
@@ -94,7 +115,7 @@ def create_firebase_user(
     display_name: Optional[str] = None,
     phone_number: Optional[str] = None,
     photo_url: Optional[str] = None
-) -> Optional[UserRecord]:
+):
     """Create a new Firebase user.
     
     Args:
@@ -107,8 +128,12 @@ def create_firebase_user(
     Returns:
         Created UserRecord or None if failed
     """
+    if not FIREBASE_AVAILABLE:
+        return None
     try:
         firebase_auth = get_firebase_auth()
+        if firebase_auth is None:
+            return None
         user = firebase_auth.create_user(
             email=email,
             password=password,
@@ -130,8 +155,12 @@ def delete_firebase_user(uid: str) -> bool:
     Returns:
         True if deleted successfully
     """
+    if not FIREBASE_AVAILABLE:
+        return False
     try:
         firebase_auth = get_firebase_auth()
+        if firebase_auth is None:
+            return False
         firebase_auth.delete_user(uid)
         return True
     except Exception:
@@ -148,8 +177,12 @@ def set_custom_claims(uid: str, claims: dict) -> bool:
     Returns:
         True if successful
     """
+    if not FIREBASE_AVAILABLE:
+        return False
     try:
         firebase_auth = get_firebase_auth()
+        if firebase_auth is None:
+            return False
         firebase_auth.set_custom_user_claims(uid, claims)
         return True
     except Exception:
