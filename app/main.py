@@ -60,7 +60,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+<<<<<<< HEAD
 # Include auth routes
+=======
+# Include Firebase auth routes only
+>>>>>>> 02321203d4f15894a8f54db55c959a7cfc3436ae
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 
 

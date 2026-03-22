@@ -1,0 +1,11 @@
+# Global code owners
+* @your-github-username
+
+# Backend specific
+/app/ @your-github-username
+
+# Infrastructure
+/infra/ @your-github-username
+
+# CI/CD
+/.github/ @your-github-username

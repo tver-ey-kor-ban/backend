@@ -5,3 +5,7 @@ env/
 venv/
 .pytest_cache/
 *.db" > .gitignore
+
+.qoder/
+.ruff_cache/
+alembic/
