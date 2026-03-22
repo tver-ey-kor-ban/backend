@@ -7,9 +7,9 @@ sqlmodel==0.0.37
 psycopg2-binary==2.9.11
 alembic==1.18.4
 
-# Validation & Settings
-pydantic[email]==2.6.1
-pydantic-settings==2.13.1
+# Validation & Settings - UPDATED TO FIX CONFLICT
+pydantic[email]>=2.11.0,<3.0.0
+pydantic-settings==2.1.0
 email-validator==2.1.0
 
 # Security & Utilities
