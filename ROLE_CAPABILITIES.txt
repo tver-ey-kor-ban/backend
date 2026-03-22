@@ -1,0 +1,777 @@
+================================================================================
+GARAGE MANAGEMENT BACKEND - ROLE CAPABILITIES DOCUMENTATION
+================================================================================
+
+This document describes what each user role can do in the system based on the
+current implementation.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. ADMIN (Platform Administrator)
+2. SHOP OWNER
+3. MECHANIC
+4. CUSTOMER
+5. PUBLIC (Unauthenticated)
+
+================================================================================
+1. ADMIN (Platform Administrator)
+================================================================================
+
+DESCRIPTION:
+The Admin role has full platform-wide access. Admins can manage all users, 
+shops, and view system-wide statistics. This role is for platform operators
+who oversee the entire garage management system.
+
+AUTHENTICATION REQUIREMENTS:
+- is_superuser=True OR roles contains "admin"
+- Valid JWT access token
+
+CAPABILITIES:
+
+--- USER MANAGEMENT ---
+
+1. List All Users
+   Endpoint: GET /api/v1/admin/users
+   Features:
+   - View all registered users
+   - Search by username, email, or full name
+   - Filter by is_active status
+   - Filter by is_superuser status
+   - Pagination support (skip/limit)
+
+2. Get User Details
+   Endpoint: GET /api/v1/admin/users/{user_id}
+   Features:
+   - View detailed user information
+   - See user's shop memberships
+   - View roles and permissions
+
+3. Update User Status
+   Endpoint: PUT /api/v1/admin/users/{user_id}/status
+   Parameters: is_active (boolean)
+   Features:
+   - Activate or deactivate user accounts
+   - Cannot deactivate own account (safety)
+
+4. Update User Role
+   Endpoint: PUT /api/v1/admin/users/{user_id}/role
+   Parameters: is_superuser (boolean)
+   Features:
+   - Grant admin privileges to users
+   - Revoke admin privileges
+   - Cannot remove own admin privileges (safety)
+
+5. Delete User
+   Endpoint: DELETE /api/v1/admin/users/{user_id}
+   Features:
+   - Permanently delete user accounts
+   - Cannot delete own account (safety)
+
+--- SHOP MANAGEMENT ---
+
+6. List All Shops
+   Endpoint: GET /api/v1/admin/shops
+   Features:
+   - View all shops on platform
+   - Filter by is_active status
+   - Pagination support
+
+7. Get Shop Details
+   Endpoint: GET /api/v1/admin/shops/{shop_id}
+   Features:
+   - View detailed shop information
+   - See shop statistics:
+     * Total products
+     * Total services
+     * Total appointments
+     * Total orders
+   - View shop members with roles
+
+8. Delete Shop
+   Endpoint: DELETE /api/v1/admin/shops/{shop_id}
+   Features:
+   - Permanently delete any shop
+   - Full platform oversight
+
+--- PLATFORM STATISTICS ---
+
+9. Platform Statistics
+   Endpoint: GET /api/v1/admin/statistics
+   Returns:
+   - User Statistics:
+     * Total users
+     * Active users
+     * Inactive users
+     * Admin count
+   - Shop Statistics:
+     * Total shops
+     * Active shops
+     * Inactive shops
+   - Catalog Statistics:
+     * Total products
+     * Total services
+   - Appointment Statistics:
+     * Total appointments
+     * Pending appointments
+     * Completed appointments
+     * Cancelled appointments
+   - Order Statistics:
+     * Total orders
+     * Pending orders
+     * Completed orders
+     * Cancelled orders
+   - Revenue Statistics:
+     * Appointment revenue
+     * Order revenue
+     * Total revenue
+
+10. Daily Statistics
+    Endpoint: GET /api/v1/admin/statistics/daily?days={N}
+    Features:
+    - View statistics for last N days
+    - New users in period
+    - New shops in period
+    - New appointments in period
+    - New orders in period
+
+--- BOOKINGS & ORDERS ---
+
+11. List All Appointments
+    Endpoint: GET /api/v1/admin/appointments
+    Features:
+    - View all appointments across ALL shops
+    - Filter by status (pending, confirmed, completed, cancelled)
+    - Filter by shop_id
+    - Pagination support
+
+12. List All Orders
+    Endpoint: GET /api/v1/admin/orders
+    Features:
+    - View all product orders across ALL shops
+    - Filter by status
+    - Filter by shop_id
+    - Pagination support
+
+--- RATINGS MODERATION ---
+
+13. List All Ratings
+    Endpoint: GET /api/v1/admin/ratings
+    Features:
+    - View all product ratings
+    - View all service ratings
+
+14. Delete Product Rating
+    Endpoint: DELETE /api/v1/admin/ratings/product/{rating_id}
+    Features:
+    - Remove inappropriate product reviews
+
+15. Delete Service Rating
+    Endpoint: DELETE /api/v1/admin/ratings/service/{rating_id}
+    Features:
+    - Remove inappropriate service reviews
+
+================================================================================
+2. SHOP OWNER
+================================================================================
+
+DESCRIPTION:
+Shop Owners have full control over their own shop. They can manage products,
+services, mechanics, and view all shop-related data. Each shop has one owner
+who created it or was assigned ownership.
+
+AUTHENTICATION REQUIREMENTS:
+- Must be authenticated user
+- Must have UserShop relationship with role="owner" for the specific shop
+- Valid JWT access token
+
+CAPABILITIES:
+
+--- SHOP MANAGEMENT ---
+
+1. Create Shop
+   Endpoint: POST /api/v1/shops
+   Features:
+   - Create new workshop/garage
+   - Automatically becomes owner
+   - Set shop details (name, address, phone, email, description)
+
+2. Update Shop
+   Endpoint: PUT /api/v1/shops/{shop_id}
+   Features:
+   - Update shop information
+   - Modify contact details
+   - Change description
+
+3. Delete Shop
+   Endpoint: DELETE /api/v1/shops/{shop_id}
+   Features:
+   - Soft delete (marks is_active=false)
+   - Only owner can delete their shop
+
+4. List My Shops
+   Endpoint: GET /api/v1/shops/my-shops
+   Features:
+   - View all shops where user is owner or mechanic
+   - See role in each shop
+
+--- MEMBER MANAGEMENT ---
+
+5. Add Member
+   Endpoint: POST /api/v1/shops/{shop_id}/members
+   Features:
+   - Add mechanics to shop
+   - Assign roles (owner, mechanic)
+   - Only owner can add members
+
+6. List Members
+   Endpoint: GET /api/v1/shops/{shop_id}/members
+   Features:
+   - View all shop members
+   - See usernames and roles
+   - View active status
+
+7. Change Member Role
+   Endpoint: PUT /api/v1/shops/{shop_id}/members/{user_id}/role
+   Features:
+   - Promote mechanic to owner
+   - Demote owner to mechanic
+   - Only owner can change roles
+
+8. Remove Member
+   Endpoint: DELETE /api/v1/shops/{shop_id}/members/{user_id}
+   Features:
+   - Remove mechanic from shop
+   - Cannot remove self
+   - Only owner can remove members
+
+--- PRODUCT MANAGEMENT ---
+
+9. Create Product
+   Endpoint: POST /api/v1/shops/{shop_id}/products
+   Features:
+   - Add new products to catalog
+   - Set name, description, price, stock, SKU
+   - Assign category
+   - Upload product images
+   - Set vehicle compatibility
+
+10. List Products
+    Endpoint: GET /api/v1/shops/{shop_id}/products
+    Features:
+    - View all products in shop
+    - Only active products shown
+
+11. Get Product
+    Endpoint: GET /api/v1/shops/{shop_id}/products/{product_id}
+    Features:
+    - View detailed product information
+    - See vehicle compatibility
+
+12. Update Product
+    Endpoint: PUT /api/v1/shops/{shop_id}/products/{product_id}
+    Features:
+    - Modify product details
+    - Update price, stock, description
+    - Change category
+
+13. Delete Product
+    Endpoint: DELETE /api/v1/shops/{shop_id}/products/{product_id}
+    Features:
+    - Soft delete product
+    - Marks is_active=false
+
+14. Search Products by Image
+    Endpoint: POST /api/v1/shops/{shop_id}/products/image-search
+    Features:
+    - Upload image to find similar products
+    - Returns products with images
+
+--- SERVICE MANAGEMENT ---
+
+15. Create Service
+    Endpoint: POST /api/v1/shops/{shop_id}/services
+    Features:
+    - Add new services
+    - Set name, description, price
+    - Set duration in minutes
+    - Choose service type:
+      * shop_based (customer brings vehicle)
+      * mobile (mechanic goes to customer)
+      * pickup_drop (shop picks up vehicle)
+    - For mobile: set service area, GPS coordinates, mobile fee
+
+16. List Services
+    Endpoint: GET /api/v1/shops/{shop_id}/services
+    Features:
+    - View all services
+    - Filter by service_type
+    - Only active services shown
+
+17. Get Service
+    Endpoint: GET /api/v1/shops/{shop_id}/services/{service_id}
+    Features:
+    - View detailed service information
+
+18. Update Service
+    Endpoint: PUT /api/v1/shops/{shop_id}/services/{service_id}
+    Features:
+    - Modify service details
+    - Update price, duration
+    - Change service type
+
+19. Delete Service
+    Endpoint: DELETE /api/v1/shops/{shop_id}/services/{service_id}
+    Features:
+    - Soft delete service
+
+20. List Services by Type Grouped
+    Endpoint: GET /api/v1/shops/{shop_id}/services/by-type
+    Features:
+    - View services grouped by type
+    - See shop_based, mobile, pickup_drop categories
+
+--- BOOKING MANAGEMENT ---
+
+21. View Pending Bookings
+    Endpoint: GET /api/v1/mechanic/shops/{shop_id}/bookings
+    Features:
+    - See all pending appointments
+    - View customer details
+    - See service requested
+    - View pricing breakdown
+
+22. Accept/Reject Booking
+    Endpoint: POST /api/v1/mechanic/shops/{shop_id}/bookings/{booking_id}/action
+    Parameters: action ("accept" or "reject")
+    Features:
+    - Accept booking (status -> confirmed)
+    - Reject booking (status -> rejected)
+    - Customer receives notification
+
+23. View Product Orders
+    Endpoint: GET /api/v1/mechanic/shops/{shop_id}/product-orders
+    Features:
+    - See pending product orders
+    - View order items
+    - See customer details
+
+24. Accept/Reject Product Order
+    Endpoint: POST /api/v1/mechanic/shops/{shop_id}/product-orders/{id}/action
+    Parameters: action ("accept" or "reject")
+    Features:
+    - Accept order (status -> confirmed)
+    - Reject order (status -> rejected)
+    - Customer receives notification
+
+--- MECHANIC PERFORMANCE ---
+
+25. View Mechanic Performance
+    Endpoint: GET /api/v1/mechanic/{mechanic_id}/performance
+    Features:
+    - See mechanic statistics:
+      * Total jobs completed
+      * Total revenue generated
+      * Average rating
+      * Completion rate
+
+26. View Mechanic History
+    Endpoint: GET /api/v1/mechanic/{mechanic_id}/performance/history
+    Features:
+    - See completed jobs list
+    - View service details
+    - See ratings received
+    - Pagination support
+
+27. Record Service Completion
+    Endpoint: POST /api/v1/mechanic/{mechanic_id}/performance/record
+    Features:
+    - Record completed service
+    - Update mechanic statistics
+
+--- RATINGS & ANALYTICS ---
+
+28. View Top Rated Products
+    Endpoint: GET /api/v1/ratings/shops/{shop_id}/top-products
+    Features:
+    - See highest-rated products
+    - Sorted by average rating
+    - View rating counts
+
+29. View Top Rated Services
+    Endpoint: GET /api/v1/ratings/shops/{shop_id}/top-services
+    Features:
+    - See highest-rated services
+    - Sorted by average rating
+
+================================================================================
+3. MECHANIC
+================================================================================
+
+DESCRIPTION:
+Mechanics are shop employees who can view products/services and manage
+bookings/orders assigned to them. They work for shop owners and handle
+customer appointments.
+
+AUTHENTICATION REQUIREMENTS:
+- Must be authenticated user
+- Must have UserShop relationship with role="mechanic" for the specific shop
+- Valid JWT access token
+
+CAPABILITIES:
+
+--- SHOP ACCESS ---
+
+1. List My Shops
+   Endpoint: GET /api/v1/mechanic/my-shops
+   Features:
+   - View all shops where I'm assigned as mechanic
+   - See shop names and my role
+
+2. View Products
+   Endpoint: GET /api/v1/shops/{shop_id}/products
+   Features:
+   - View all products in assigned shops
+   - Read-only access
+
+3. View Services
+   Endpoint: GET /api/v1/shops/{shop_id}/services
+   Features:
+   - View all services in assigned shops
+   - Read-only access
+   - Filter by service type
+
+--- NOTIFICATIONS ---
+
+4. View My Notifications
+   Endpoint: GET /api/v1/mechanic/my-notifications
+   Features:
+   - See new booking notifications
+   - See order notifications
+   - See status updates
+   - Unread count displayed
+
+5. Mark Notification Read
+   Endpoint: PUT /api/v1/mechanic/my-notifications/{id}/read
+   Features:
+   - Mark notification as read
+   - Track which notifications seen
+
+--- BOOKING MANAGEMENT ---
+
+6. View Pending Bookings
+   Endpoint: GET /api/v1/mechanic/shops/{shop_id}/bookings
+   Features:
+   - See appointments needing action
+   - View customer information
+   - See service details
+   - View pricing
+
+7. Accept Booking
+   Endpoint: POST /api/v1/mechanic/shops/{shop_id}/bookings/{id}/action
+   Parameters: action="accept"
+   Features:
+   - Confirm appointment
+   - Customer receives confirmation
+   - Status changes to confirmed
+
+8. Reject Booking
+   Endpoint: POST /api/v1/mechanic/shops/{shop_id}/bookings/{id}/action
+   Parameters: action="reject"
+   Features:
+   - Decline appointment
+   - Customer receives rejection notification
+   - Status changes to rejected
+
+9. View Completed Bookings
+   Endpoint: GET /api/v1/mechanic/shops/{shop_id}/bookings/completed
+   Features:
+   - See history of completed jobs
+   - View customer feedback
+
+--- PRODUCT ORDERS ---
+
+10. View Pending Orders
+    Endpoint: GET /api/v1/mechanic/shops/{shop_id}/product-orders
+    Features:
+    - See product orders needing action
+    - View order items
+    - View customer details
+
+11. Accept Order
+    Endpoint: POST /api/v1/mechanic/shops/{shop_id}/product-orders/{id}/action
+    Parameters: action="accept"
+    Features:
+    - Confirm product order
+    - Prepare items for pickup
+
+12. Reject Order
+    Endpoint: POST /api/v1/mechanic/shops/{shop_id}/product-orders/{id}/action
+    Parameters: action="reject"
+    Features:
+    - Decline order (out of stock, etc.)
+    - Customer receives notification
+
+--- PERSONAL PERFORMANCE ---
+
+13. View My Performance
+    Endpoint: GET /api/v1/mechanic/{mechanic_id}/performance
+    Features:
+    - View own statistics:
+      * Jobs completed
+      * Revenue generated
+      * Average rating
+      * Completion rate
+
+14. View My History
+    Endpoint: GET /api/v1/mechanic/{mechanic_id}/performance/history
+    Features:
+    - See completed jobs
+    - View ratings received
+    - Pagination support
+
+================================================================================
+4. CUSTOMER
+================================================================================
+
+DESCRIPTION:
+Customers are end-users who browse shops, book services, purchase products,
+and manage their vehicles. They can rate services after completion.
+
+AUTHENTICATION REQUIREMENTS:
+- Some endpoints public (browse only)
+- Booking/purchasing requires authentication
+- Valid JWT access token for protected endpoints
+
+CAPABILITIES:
+
+--- BROWSING (PUBLIC) ---
+
+1. List All Shops
+   Endpoint: GET /api/v1/shops
+   Features:
+   - View all active shops
+   - See shop names and addresses
+   - No authentication required
+
+2. Get Shop Details
+   Endpoint: GET /api/v1/shops/{shop_id}
+   Features:
+   - View shop information
+   - See contact details
+   - No authentication required
+
+3. Browse Products
+   Endpoint: GET /api/v1/customers/shops/{shop_id}/browse/products
+   Features:
+   - View shop's product catalog
+   - Filter by category
+   - See prices and availability
+
+4. Browse Services
+   Endpoint: GET /api/v1/customers/shops/{shop_id}/browse/services
+   Features:
+   - View shop's service catalog
+   - Filter by service type
+   - See prices and duration
+
+5. Browse Services by Type
+   Endpoint: GET /api/v1/customers/shops/{shop_id}/browse/services/by-type
+   Features:
+   - View services grouped by type
+   - See mobile vs shop-based options
+
+6. View Product Reviews
+   Endpoint: GET /api/v1/customers/shops/{shop_id}/products/{id}/reviews
+   Features:
+   - Read customer reviews
+   - See average rating
+   - View review count
+
+7. View Service Reviews
+   Endpoint: GET /api/v1/customers/shops/{shop_id}/services/{id}/reviews
+   Features:
+   - Read service reviews
+   - See average rating
+
+--- VEHICLE MANAGEMENT ---
+
+8. Add Vehicle
+   Endpoint: POST /api/v1/customers/my-vehicles
+   Features:
+   - Save vehicle to profile
+   - Enter make, model, year, engine
+   - Set as primary vehicle
+   - Add VIN, license plate
+
+9. List My Vehicles
+   Endpoint: GET /api/v1/customers/my-vehicles
+   Features:
+   - View all saved vehicles
+   - See primary vehicle
+   - View vehicle details
+
+10. Update Vehicle
+    Endpoint: PUT /api/v1/customers/my-vehicles/{vehicle_id}
+    Features:
+    - Modify vehicle details
+    - Change primary status
+    - Update VIN/plate
+
+11. Delete Vehicle
+    Endpoint: DELETE /api/v1/customers/my-vehicles/{vehicle_id}
+    Features:
+    - Remove vehicle from profile
+
+--- BOOKING & ORDERS ---
+
+12. Calculate Price Preview
+    Endpoint: POST /api/v1/product-orders/calculate-price
+    Features:
+    - Get price estimate before booking
+    - See service price breakdown
+    - View tax calculation
+    - See mobile service fees
+
+13. Unified Booking
+    Endpoint: POST /api/v1/product-orders/unified-booking
+    Features:
+    - Book service + products together
+    - Choose appointment date
+    - Select pickup date for products
+    - Enter vehicle information
+    - Add notes for mechanic
+    - For mobile services: provide address
+
+14. Book Appointment Only
+    Endpoint: POST /api/v1/customers/appointments
+    Features:
+    - Book service appointment
+    - Select service
+    - Choose date/time
+    - Select saved vehicle or enter manually
+
+15. View My Appointments
+    Endpoint: GET /api/v1/customers/my-appointments
+    Features:
+    - See all my bookings
+    - View status (pending, confirmed, completed, cancelled)
+    - See pricing details
+
+16. Cancel Appointment
+    Endpoint: PUT /api/v1/customers/my-appointments/{id}/cancel
+    Features:
+    - Cancel pending appointment
+    - Cannot cancel completed appointments
+    - Shop receives notification
+
+17. View Service History
+    Endpoint: GET /api/v1/customers/service-history
+    Features:
+    - See completed services
+    - View invoices
+    - See mechanic who served
+
+--- RATINGS ---
+
+18. Rate Product
+    Endpoint: POST /api/v1/ratings/products/{product_id}
+    Features:
+    - Rate purchased product (1-5 stars)
+    - Write review
+    - Must have purchased product
+
+19. Rate Service
+    Endpoint: POST /api/v1/ratings/services/{service_id}
+    Features:
+    - Rate completed service (1-5 stars)
+    - Write review
+    - Must have completed appointment
+
+20. Rate Mechanic
+    Endpoint: POST /api/v1/ratings/mechanics/{mechanic_id}
+    Features:
+    - Rate mechanic who served you
+    - Write feedback
+
+21. View My Ratings
+    Endpoint: GET /api/v1/ratings/my-ratings
+    Features:
+    - See all ratings I've given
+    - View products/services rated
+
+================================================================================
+5. PUBLIC (Unauthenticated)
+================================================================================
+
+DESCRIPTION:
+Public endpoints require no authentication. Limited to basic information
+and user registration.
+
+CAPABILITIES:
+
+1. Health Check
+   Endpoint: GET /
+   Returns: {"message": "Backend is running"}
+
+2. API Documentation
+   Endpoint: GET /docs
+   Features:
+   - Swagger UI interface
+   - Interactive API documentation
+   - Test endpoints directly
+
+3. Register Account
+   Endpoint: POST /api/v1/auth/register
+   Features:
+   - Create new user account
+   - Set username, email, password
+   - Provide full name
+
+4. Login
+   Endpoint: POST /api/v1/auth/login
+   Features:
+   - Authenticate with username/password
+   - Receive access token
+   - Receive refresh token
+
+5. Refresh Token
+   Endpoint: POST /api/v1/auth/refresh
+   Features:
+   - Get new access token
+   - Use refresh token
+
+================================================================================
+SUMMARY TABLE
+================================================================================
+
+ROLE          | ENDPOINTS | KEY CAPABILITIES
+--------------|-----------|-------------------------------------------
+ADMIN         | 15        | Platform management, user/shops oversight
+SHOP OWNER    | 29        | Full shop CRUD, member management, analytics
+MECHANIC      | 14        | View catalog, manage bookings, view performance
+CUSTOMER      | 21        | Browse, book, purchase, rate, manage vehicles
+PUBLIC        | 5         | Health check, docs, register, login
+--------------|-----------|-------------------------------------------
+TOTAL         | 84+       | Complete garage management system
+
+================================================================================
+TEST COVERAGE
+================================================================================
+
+Total Tests: 77
+- Authentication: 17 tests
+- Admin: 19 tests
+- Shops: 10 tests
+- Products/Services: 10 tests
+- Bookings: 9 tests
+- Notifications: 6 tests
+- Ratings: 6 tests
+
+All tests passing ✓
+Ruff linting passed ✓
+
+================================================================================
+END OF DOCUMENT
+================================================================================

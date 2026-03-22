@@ -133,3 +133,102 @@ def mock_firebase_decoded_token_fixture():
         "email": "firebase@example.com",
         "name": "Firebase User"
     }
+
+
+# Shop Owner fixture
+@pytest.fixture(name="shop_owner")
+def shop_owner_fixture(session):
+    """Create a shop owner test user."""
+    user = User(
+        email="owner@example.com",
+        username="shopowner",
+        full_name="Shop Owner",
+        hashed_password=get_password_hash("ownerpassword"),
+        roles="user",
+        is_active=True,
+        is_superuser=False
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@pytest.fixture(name="owner_auth_headers")
+def owner_auth_headers_fixture(shop_owner):
+    """Get authentication headers for shop owner."""
+    roles_list = shop_owner.roles.split(",") if shop_owner.roles else ["user"]
+    token = create_access_token(
+        user_id=shop_owner.id,
+        username=shop_owner.username,
+        email=shop_owner.email,
+        roles=roles_list,
+        is_superuser=shop_owner.is_superuser
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+# Mechanic fixture
+@pytest.fixture(name="mechanic_user")
+def mechanic_user_fixture(session):
+    """Create a mechanic test user."""
+    user = User(
+        email="mechanic@example.com",
+        username="mechanic",
+        full_name="Test Mechanic",
+        hashed_password=get_password_hash("mechanicpassword"),
+        roles="user",
+        is_active=True,
+        is_superuser=False
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@pytest.fixture(name="mechanic_auth_headers")
+def mechanic_auth_headers_fixture(mechanic_user):
+    """Get authentication headers for mechanic."""
+    roles_list = mechanic_user.roles.split(",") if mechanic_user.roles else ["user"]
+    token = create_access_token(
+        user_id=mechanic_user.id,
+        username=mechanic_user.username,
+        email=mechanic_user.email,
+        roles=roles_list,
+        is_superuser=mechanic_user.is_superuser
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+# Customer fixture
+@pytest.fixture(name="customer_user")
+def customer_user_fixture(session):
+    """Create a customer test user."""
+    user = User(
+        email="customer@example.com",
+        username="customer",
+        full_name="Test Customer",
+        hashed_password=get_password_hash("customerpassword"),
+        roles="user",
+        is_active=True,
+        is_superuser=False
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@pytest.fixture(name="customer_auth_headers")
+def customer_auth_headers_fixture(customer_user):
+    """Get authentication headers for customer."""
+    roles_list = customer_user.roles.split(",") if customer_user.roles else ["user"]
+    token = create_access_token(
+        user_id=customer_user.id,
+        username=customer_user.username,
+        email=customer_user.email,
+        roles=roles_list,
+        is_superuser=customer_user.is_superuser
+    )
+    return {"Authorization": f"Bearer {token}"}

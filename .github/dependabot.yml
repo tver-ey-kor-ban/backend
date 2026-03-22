@@ -1,37 +1,42 @@
 version: 2
 updates:
-  # Python dependencies
+  # 1. Python Dependencies (FastAPI/Django)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "your-github-username"
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    # This groups all python updates into one single PR
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "python"
 
-  # GitHub Actions
+  # 2. GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "your-github-username"
+      interval: "monthly"
+    groups:
+      actions-updates:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "github-actions"
 
-  # Docker
+  # 3. Docker
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "your-github-username"
+      interval: "monthly"
+    groups:
+      docker-updates:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "docker"
