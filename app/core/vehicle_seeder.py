@@ -1,5 +1,5 @@
 """Seed vehicle database with common makes and models."""
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models.vehicle import VehicleMake, VehicleModel, VehicleYear, VehicleEngine
 
@@ -8,7 +8,7 @@ def seed_vehicles(session: Session):
     """Seed database with common vehicle data."""
     
     # Check if already seeded
-    existing = session.exec(VehicleMake).first()
+    existing = session.exec(select(VehicleMake)).first()
     if existing:
         print("Vehicle data already seeded")
         return

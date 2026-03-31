@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
 from sqlmodel import Field, SQLModel, Relationship
+from sqlalchemy import String
 
 if TYPE_CHECKING:
     from app.models.shop import UserShop
@@ -16,7 +17,7 @@ class UserBase(SQLModel):
     full_name: Optional[str] = None
     is_active: bool = True
     is_superuser: bool = False
-    roles: str = Field(default="user")  # Comma-separated roles for SQLite compatibility
+    roles: str = Field(default="user", sa_type=String)  # Comma-separated roles
 
 
 class User(UserBase, table=True):

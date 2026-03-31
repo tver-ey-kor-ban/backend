@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -6,6 +7,7 @@ from app.db import init_db, get_session
 from app.api.v1.endpoints import auth, shops, products, services, vehicles, categories, customers, customer_vehicles, product_orders, mechanic_bookings, mechanic_performance, ratings, admin
 from app.services.auth_service import AuthService
 from app.core.vehicle_seeder import seed_vehicles
+from app.core.test_data_seeder import seed_test_data
 from app.models.user import UserCreate
 
 
@@ -15,21 +17,27 @@ def create_default_admin():
     try:
         auth_service = AuthService(session)
         
+        # Get admin credentials from environment or use defaults
+        admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+        
         # Check if admin already exists
-        admin = auth_service.get_user_by_username("admin")
+        admin = auth_service.get_user_by_username(admin_username)
         if not admin:
             admin_data = UserCreate(
-                email="admin@example.com",
-                username="admin",
-                password="admin123",  # Change this in production!
+                email=admin_email,
+                username=admin_username,
+                password=admin_password,
                 full_name="Administrator",
                 roles="admin,user",
                 is_active=True,
                 is_superuser=True
             )
             auth_service.create_user(admin_data)
-            print("Default admin account created: admin / admin123")
-            print("WARNING: Please change the default admin password!")
+            print(f"Default admin account created: {admin_username}")
+            if admin_password == "admin123":
+                print("WARNING: Using default admin password. Please change it in production!")
     except Exception as e:
         print(f"Error creating default admin: {e}")
     finally:
@@ -53,16 +61,27 @@ async def lifespan(app: FastAPI):
     # Create default admin account
     create_default_admin()
     
+    # Seed test data for team testing
+    session = next(get_session())
+    try:
+        seed_test_data(session)
+    finally:
+        session.close()
+    
     yield
     # Shutdown: cleanup if needed
 
 
 app = FastAPI(title="Mobile App Backend", lifespan=lifespan)
 
-# Important for Flutter: Allow your app to communicate with the server
+# Configure CORS - use environment variable in production
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
+if allowed_origins != "*":
+    allowed_origins = [origin.strip() for origin in allowed_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this in production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
