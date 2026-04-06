@@ -23,6 +23,14 @@ class UnifiedBookingCreate(SQLModel):
     customer_vehicle_id: Optional[int] = None
     vehicle_info: Optional[str] = None
     
+    # Vehicle details (for auto-saving if customer_vehicle_id not provided)
+    vehicle_make: Optional[str] = None
+    vehicle_model: Optional[str] = None
+    vehicle_year: Optional[int] = None
+    vehicle_engine: Optional[str] = None
+    vehicle_fuel_type: Optional[str] = None
+    vehicle_license_plate: Optional[str] = None
+    
     # Service info (optional - for service appointments)
     service_id: Optional[int] = None
     service_notes: Optional[str] = None
@@ -79,11 +87,14 @@ def create_unified_booking(
         session.add(user_shop)
         session.flush()
     
-    # Validate customer vehicle if provided
-    if booking_data.customer_vehicle_id:
+    # Handle vehicle - validate existing or auto-save new
+    customer_vehicle_id = booking_data.customer_vehicle_id
+    
+    if customer_vehicle_id:
+        # Validate existing vehicle
         vehicle = session.exec(
             select(CustomerVehicle).where(
-                CustomerVehicle.id == booking_data.customer_vehicle_id,
+                CustomerVehicle.id == customer_vehicle_id,
                 CustomerVehicle.customer_id == current_user.user_id,
                 CustomerVehicle.is_active
             )
@@ -93,6 +104,21 @@ def create_unified_booking(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vehicle not found"
             )
+    elif booking_data.vehicle_make and booking_data.vehicle_model:
+        # Auto-save new vehicle if make and model provided
+        new_vehicle = CustomerVehicle(
+            customer_id=current_user.user_id,
+            make=booking_data.vehicle_make,
+            model=booking_data.vehicle_model,
+            year=booking_data.vehicle_year,
+            engine=booking_data.vehicle_engine,
+            fuel_type=booking_data.vehicle_fuel_type,
+            license_plate=booking_data.vehicle_license_plate,
+            is_active=True
+        )
+        session.add(new_vehicle)
+        session.flush()
+        customer_vehicle_id = new_vehicle.id
     
     # Calculate pricing
     from app.services.pricing_service import PricingService
@@ -130,7 +156,7 @@ def create_unified_booking(
             shop_id=booking_data.shop_id,
             customer_id=current_user.user_id,
             service_id=booking_data.service_id,
-            customer_vehicle_id=booking_data.customer_vehicle_id,
+            customer_vehicle_id=customer_vehicle_id,
             vehicle_info=booking_data.vehicle_info,
             appointment_date=booking_data.appointment_date or datetime.utcnow(),
             notes=appointment_notes.strip(),
