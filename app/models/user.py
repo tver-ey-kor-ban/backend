@@ -8,6 +8,9 @@ if TYPE_CHECKING:
     from app.models.appointment import Appointment
     from app.models.customer_vehicle import CustomerVehicle
     from app.models.product_order import ProductOrder
+    from app.models.quotation import Quotation
+    from app.models.repair_progress import RepairProgress
+    from app.models.invoice import Invoice
 
 
 class UserBase(SQLModel):
@@ -57,6 +60,15 @@ class User(UserBase, table=True):
     
     # Relationship to product orders
     product_orders: List["ProductOrder"] = Relationship(back_populates="customer")
+    
+    # Relationship to quotations
+    quotations: List["Quotation"] = Relationship(back_populates="customer")
+    
+    # Relationship to repair progress
+    repair_progress_records: List["RepairProgress"] = Relationship(back_populates="customer")
+    
+    # Relationship to invoices
+    invoices: List["Invoice"] = Relationship(back_populates="customer")
 
 
 class UserCreate(UserBase):
