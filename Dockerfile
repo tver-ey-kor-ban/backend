@@ -1,25 +1,21 @@
-FROM python:3.14-slim
+FROM python:3.12-slim
 
 WORKDIR /code
 
-# Install system dependencies for psycopg2
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
 COPY . .
 
-# Set Python path
 ENV PYTHONPATH=/code
+ENV ENVIRONMENT=production
 
-# Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use $PORT from environment (Render sets this), default to 8000
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-1}
