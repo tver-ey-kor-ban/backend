@@ -11,10 +11,25 @@ from app.models.invoice import (
 )
 from app.models.user import User
 from app.core.security import get_current_user, TokenData
+from app.repositories.shop_repository import ShopRepository
+from app.repositories.user_repository import UserRepository
+from app.repositories.notification_repository import NotificationRepository
 from app.services.shop_service import ShopService
 from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+
+
+def get_shop_service(session: Session = Depends(get_session)) -> ShopService:
+    return ShopService(ShopRepository(session))
+
+
+def get_notification_service(session: Session = Depends(get_session)) -> NotificationService:
+    return NotificationService(
+        NotificationRepository(session),
+        ShopRepository(session),
+        UserRepository(session),
+    )
 
 
 def generate_invoice_number(shop_id: int, session: Session) -> str:
@@ -34,11 +49,10 @@ def create_invoice(
     shop_id: int,
     invoice_data: InvoiceCreate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Create a new invoice (Shop owner/mechanic only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -103,11 +117,10 @@ def get_shop_invoices(
     shop_id: int,
     status: Optional[InvoiceStatus] = None,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Get all invoices for a shop (Shop owner/mechanic only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -164,11 +177,10 @@ def get_invoice_detail(
     shop_id: int,
     invoice_id: int,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Get invoice details (Shop owner/mechanic only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -231,12 +243,11 @@ def send_invoice(
     shop_id: int,
     invoice_id: int,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Send invoice to customer (changes status to SENT)."""
-    shop_service = ShopService(session)
-    notification_service = NotificationService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -295,12 +306,11 @@ def record_payment(
     invoice_id: int,
     payment_data: PaymentCreate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Record a payment for an invoice (Shop only)."""
-    shop_service = ShopService(session)
-    notification_service = NotificationService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

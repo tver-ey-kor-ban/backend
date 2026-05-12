@@ -7,10 +7,39 @@ from sqlmodel import Session, select
 from app.db import get_session
 from app.models.appointment import Appointment, AppointmentCreate, AppointmentRead, AppointmentStatus, ServiceHistory
 from app.models.shop import UserShop
-from app.models.user import User
 from app.core.security import get_current_user, TokenData
+from app.repositories.shop_repository import ShopRepository
+from app.repositories.user_repository import UserRepository
+from app.repositories.notification_repository import NotificationRepository
+from app.repositories.order_repository import OrderRepository
+from app.services.shop_service import ShopService
+from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/customers", tags=["customers"])
+
+
+def get_shop_service(session: Session = Depends(get_session)) -> ShopService:
+    return ShopService(ShopRepository(session))
+
+
+def get_notification_service(session: Session = Depends(get_session)) -> NotificationService:
+    return NotificationService(
+        NotificationRepository(session),
+        ShopRepository(session),
+        UserRepository(session),
+    )
+
+
+def get_shop_repo(session: Session = Depends(get_session)) -> ShopRepository:
+    return ShopRepository(session)
+
+
+def get_user_repo(session: Session = Depends(get_session)) -> UserRepository:
+    return UserRepository(session)
+
+
+def get_order_repo(session: Session = Depends(get_session)) -> OrderRepository:
+    return OrderRepository(session)
 
 
 # ==================== PUBLIC BROWSING (No login required) ====================
@@ -194,58 +223,36 @@ def get_appointment_details(
 def cancel_appointment(
     appointment_id: int,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    order_repo: OrderRepository = Depends(get_order_repo),
+    shop_repo: ShopRepository = Depends(get_shop_repo),
+    user_repo: UserRepository = Depends(get_user_repo),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Cancel an appointment (only if not completed)."""
-    appointment = session.exec(
-        select(Appointment).where(
-            Appointment.id == appointment_id,
-            Appointment.customer_id == current_user.user_id
-        )
-    ).first()
-    
-    if not appointment:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Appointment not found"
-        )
-    
-    if appointment.status == AppointmentStatus.COMPLETED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot cancel completed appointment"
-        )
-    
-    appointment.status = AppointmentStatus.CANCELLED
-    session.commit()
-    
-    # Notify shop members about cancellation
-    from app.services.notification_service import NotificationService
     from app.models.notification import NotificationType
-    notification_service = NotificationService(session)
-    
-    # Get customer info
-    customer = session.get(User, current_user.user_id)
+
+    appointment = order_repo.get_appointment_by_customer_and_id(appointment_id, current_user.user_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+
+    if appointment.status == AppointmentStatus.COMPLETED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot cancel completed appointment")
+
+    appointment.status = AppointmentStatus.CANCELLED
+    order_repo.update_appointment(appointment)
+
+    customer = user_repo.get_by_id(current_user.user_id)
     customer_name = customer.full_name if customer else "A customer"
-    
-    # Notify shop members
-    
-    members = session.exec(
-        select(UserShop).where(
-            UserShop.shop_id == appointment.shop_id,
-            UserShop.is_active
-        )
-    ).all()
-    
-    for member in members:
+
+    for member in shop_repo.get_active_members(appointment.shop_id):
         notification_service.create_notification(
             user_id=member.user_id,
             type=NotificationType.BOOKING_CANCELLED,
             title="❌ Booking Cancelled",
             message=f"{customer_name} cancelled their appointment on {appointment.appointment_date.strftime('%Y-%m-%d %H:%M')}",
-            appointment_id=appointment.id
+            appointment_id=appointment.id,
         )
-    
+
     return {"message": "Appointment cancelled successfully"}
 
 
@@ -280,14 +287,10 @@ def get_shop_appointments(
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Get all appointments for a shop (Owner/Mechanic only)."""
-    from app.services.shop_service import ShopService
-    
-    shop_service = ShopService(session)
-    
-    # Check if user is owner or mechanic
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -317,13 +320,10 @@ def update_appointment_status(
     appointment_id: int,
     new_status: AppointmentStatus,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Update appointment status (Owner/Mechanic only)."""
-    from app.services.shop_service import ShopService
-    
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -10,12 +10,34 @@ from app.models.quotation import (
     QuotationUpdate, QuotationApprovalRequest, QuotationStatus
 )
 from app.models.appointment import Appointment
-from app.models.user import User
 from app.core.security import get_current_user, TokenData
+from app.repositories.shop_repository import ShopRepository
+from app.repositories.user_repository import UserRepository
+from app.repositories.notification_repository import NotificationRepository
 from app.services.shop_service import ShopService
 from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
+
+
+def get_shop_service(session: Session = Depends(get_session)) -> ShopService:
+    return ShopService(ShopRepository(session))
+
+
+def get_notification_service(session: Session = Depends(get_session)) -> NotificationService:
+    return NotificationService(
+        NotificationRepository(session),
+        ShopRepository(session),
+        UserRepository(session),
+    )
+
+
+def get_user_repo(session: Session = Depends(get_session)) -> UserRepository:
+    return UserRepository(session)
+
+
+def get_shop_repo(session: Session = Depends(get_session)) -> ShopRepository:
+    return ShopRepository(session)
 
 
 # ==================== SHOP OWNER: CREATE/MANAGE QUOTATIONS ====================
@@ -25,11 +47,10 @@ def create_quotation(
     shop_id: int,
     quotation_data: QuotationCreate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Create a new quotation for a customer (Shop owner/mechanic only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -111,11 +132,10 @@ def get_shop_quotations(
     shop_id: int,
     status: Optional[QuotationStatus] = None,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Get all quotations for a shop (Shop owner/mechanic only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -166,11 +186,10 @@ def get_quotation_detail(
     shop_id: int,
     quotation_id: int,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Get quotation details (Shop owner/mechanic only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -222,11 +241,10 @@ def update_quotation(
     quotation_id: int,
     update_data: QuotationUpdate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Update a quotation (Shop owner/mechanic only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -286,12 +304,11 @@ def send_quotation(
     shop_id: int,
     quotation_id: int,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Send quotation to customer (changes status to SENT)."""
-    shop_service = ShopService(session)
-    notification_service = NotificationService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -447,11 +464,12 @@ def handle_quotation_action(
     quotation_id: int,
     action_request: QuotationApprovalRequest,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    notification_service: NotificationService = Depends(get_notification_service),
+    user_repo: UserRepository = Depends(get_user_repo),
+    shop_repo: ShopRepository = Depends(get_shop_repo),
 ):
     """Customer approves or rejects a quotation."""
-    notification_service = NotificationService(session)
-    
     quotation = session.exec(
         select(Quotation).where(
             Quotation.id == quotation_id,
@@ -479,19 +497,11 @@ def handle_quotation_action(
         
         # Notify shop
         from app.models.notification import NotificationType
-        from app.models.shop import UserShop
-        
-        customer = session.get(User, current_user.user_id)
+
+        customer = user_repo.get_by_id(current_user.user_id)
         customer_name = customer.full_name if customer else "A customer"
-        
-        members = session.exec(
-            select(UserShop).where(
-                UserShop.shop_id == quotation.shop_id,
-                UserShop.is_active
-            )
-        ).all()
-        
-        for member in members:
+
+        for member in shop_repo.get_active_members(quotation.shop_id):
             notification_service.create_notification(
                 user_id=member.user_id,
                 type=NotificationType.STATUS_UPDATE,
@@ -518,19 +528,11 @@ def handle_quotation_action(
         
         # Notify shop
         from app.models.notification import NotificationType
-        from app.models.shop import UserShop
-        
-        customer = session.get(User, current_user.user_id)
+
+        customer = user_repo.get_by_id(current_user.user_id)
         customer_name = customer.full_name if customer else "A customer"
-        
-        members = session.exec(
-            select(UserShop).where(
-                UserShop.shop_id == quotation.shop_id,
-                UserShop.is_active
-            )
-        ).all()
-        
-        for member in members:
+
+        for member in shop_repo.get_active_members(quotation.shop_id):
             notification_service.create_notification(
                 user_id=member.user_id,
                 type=NotificationType.STATUS_UPDATE,

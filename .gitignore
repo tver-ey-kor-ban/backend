@@ -9,3 +9,6 @@ venv/
 .qoder/
 .ruff_cache/
 alembic/
+
+API_DOCUMENTATION.md
+DEPLOYMENT_GUIDE.md

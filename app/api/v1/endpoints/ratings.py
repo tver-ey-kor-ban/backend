@@ -1,188 +1,166 @@
 """Rating endpoints for products and services."""
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.db import get_session
 from app.core.security import get_current_user, TokenData
+from app.repositories.rating_repository import RatingRepository
+from app.repositories.order_repository import OrderRepository
+from app.repositories.product_repository import ProductRepository
+from app.repositories.shop_repository import ShopRepository
+from app.repositories.user_repository import UserRepository
 from app.services.rating_service import RatingService
-from app.models.ratings import (
-    ProductRatingCreate, ServiceRatingCreate
-)
+from app.services.shop_service import ShopService
+from app.models.ratings import ProductRatingCreate, ServiceRatingCreate
 
 router = APIRouter(prefix="/ratings", tags=["ratings"])
 
 
-# ==================== PRODUCT RATINGS ====================
+def get_rating_service(session: Session = Depends(get_session)) -> RatingService:
+    return RatingService(
+        RatingRepository(session),
+        OrderRepository(session),
+        ProductRepository(session),
+    )
+
+
+def get_shop_service(session: Session = Depends(get_session)) -> ShopService:
+    return ShopService(ShopRepository(session))
+
+
+def get_user_repo(session: Session = Depends(get_session)) -> UserRepository:
+    return UserRepository(session)
+
+
+def get_rating_repo(session: Session = Depends(get_session)) -> RatingRepository:
+    return RatingRepository(session)
+
+
+def get_product_repo(session: Session = Depends(get_session)) -> ProductRepository:
+    return ProductRepository(session)
+
+
+# ── Product ratings ───────────────────────────────────────────────────────────
 
 @router.post("/products")
 def rate_product(
     rating_data: ProductRatingCreate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    rating_service: RatingService = Depends(get_rating_service),
 ):
     """Rate a product (customer only, after purchase)."""
-    rating_service = RatingService(session)
-    
     try:
         rating = rating_service.rate_product(
             customer_id=current_user.user_id,
             product_id=rating_data.product_id,
             rating=rating_data.rating,
             review=rating_data.review,
-            order_id=rating_data.order_id
+            order_id=rating_data.order_id,
         )
-        
-        return {
-            "message": "Product rated successfully",
-            "rating_id": rating.id
-        }
+        return {"message": "Product rated successfully", "rating_id": rating.id}
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/products/{product_id}/summary")
 def get_product_rating_summary(
     product_id: int,
-    session: Session = Depends(get_session)
+    rating_service: RatingService = Depends(get_rating_service),
 ):
     """Get rating summary for a product (public)."""
-    rating_service = RatingService(session)
-    summary = rating_service.get_product_rating_summary(product_id)
-    return summary
+    return rating_service.get_product_rating_summary(product_id)
 
 
 @router.get("/products/{product_id}/reviews")
 def get_product_reviews(
     product_id: int,
     limit: int = Query(20, ge=1, le=100),
-    session: Session = Depends(get_session)
+    rating_service: RatingService = Depends(get_rating_service),
+    user_repo: UserRepository = Depends(get_user_repo),
 ):
     """Get reviews for a product (public)."""
-    from app.models.user import User
-    
-    rating_service = RatingService(session)
     reviews = rating_service.get_product_reviews(product_id, limit)
-    
-    # Enrich with customer names
     result = []
     for review in reviews:
-        customer = session.get(User, review.customer_id)
+        customer = user_repo.get_by_id(review.customer_id)
         result.append({
             "id": review.id,
             "customer_name": customer.full_name if customer else "Anonymous",
             "rating": review.rating,
             "review": review.review,
-            "created_at": review.created_at
+            "created_at": review.created_at,
         })
-    
-    return {
-        "product_id": product_id,
-        "reviews": result
-    }
+    return {"product_id": product_id, "reviews": result}
 
 
-# ==================== SERVICE RATINGS ====================
+# ── Service ratings ───────────────────────────────────────────────────────────
 
 @router.post("/services")
 def rate_service(
     rating_data: ServiceRatingCreate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    rating_service: RatingService = Depends(get_rating_service),
 ):
     """Rate a service (customer only, after appointment completed)."""
-    rating_service = RatingService(session)
-    
     try:
         rating = rating_service.rate_service(
             customer_id=current_user.user_id,
             service_id=rating_data.service_id,
             rating=rating_data.rating,
             review=rating_data.review,
-            appointment_id=rating_data.appointment_id
+            appointment_id=rating_data.appointment_id,
         )
-        
-        return {
-            "message": "Service rated successfully",
-            "rating_id": rating.id
-        }
+        return {"message": "Service rated successfully", "rating_id": rating.id}
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/services/{service_id}/summary")
 def get_service_rating_summary(
     service_id: int,
-    session: Session = Depends(get_session)
+    rating_service: RatingService = Depends(get_rating_service),
 ):
     """Get rating summary for a service (public)."""
-    rating_service = RatingService(session)
-    summary = rating_service.get_service_rating_summary(service_id)
-    return summary
+    return rating_service.get_service_rating_summary(service_id)
 
 
 @router.get("/services/{service_id}/reviews")
 def get_service_reviews(
     service_id: int,
     limit: int = Query(20, ge=1, le=100),
-    session: Session = Depends(get_session)
+    rating_service: RatingService = Depends(get_rating_service),
+    user_repo: UserRepository = Depends(get_user_repo),
 ):
     """Get reviews for a service (public)."""
-    from app.models.user import User
-    
-    rating_service = RatingService(session)
     reviews = rating_service.get_service_reviews(service_id, limit)
-    
-    # Enrich with customer names
     result = []
     for review in reviews:
-        customer = session.get(User, review.customer_id)
+        customer = user_repo.get_by_id(review.customer_id)
         result.append({
             "id": review.id,
             "customer_name": customer.full_name if customer else "Anonymous",
             "rating": review.rating,
             "review": review.review,
-            "created_at": review.created_at
+            "created_at": review.created_at,
         })
-    
-    return {
-        "service_id": service_id,
-        "reviews": result
-    }
+    return {"service_id": service_id, "reviews": result}
 
 
-# ==================== SHOP OWNER: TOP RATED ====================
+# ── Shop owner: top rated ─────────────────────────────────────────────────────
 
 @router.get("/shops/{shop_id}/top-products")
 def get_shop_top_rated_products(
     shop_id: int,
     limit: int = Query(10, ge=1, le=50),
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    shop_service: ShopService = Depends(get_shop_service),
+    rating_service: RatingService = Depends(get_rating_service),
 ):
     """Get top rated products in a shop (Owner only)."""
-    from app.services.shop_service import ShopService
-    
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_owner(current_user.user_id, shop_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only shop owner can view ratings"
-        )
-    
-    rating_service = RatingService(session)
-    top_products = rating_service.get_shop_top_rated_products(shop_id, limit)
-    
-    return {
-        "shop_id": shop_id,
-        "top_products": top_products
-    }
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only shop owner can view ratings")
+
+    return {"shop_id": shop_id, "top_products": rating_service.get_shop_top_rated_products(shop_id, limit)}
 
 
 @router.get("/shops/{shop_id}/top-services")
@@ -190,57 +168,31 @@ def get_shop_top_rated_services(
     shop_id: int,
     limit: int = Query(10, ge=1, le=50),
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    shop_service: ShopService = Depends(get_shop_service),
+    rating_service: RatingService = Depends(get_rating_service),
 ):
     """Get top rated services in a shop (Owner only)."""
-    from app.services.shop_service import ShopService
-    
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_owner(current_user.user_id, shop_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only shop owner can view ratings"
-        )
-    
-    rating_service = RatingService(session)
-    top_services = rating_service.get_shop_top_rated_services(shop_id, limit)
-    
-    return {
-        "shop_id": shop_id,
-        "top_services": top_services
-    }
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only shop owner can view ratings")
+
+    return {"shop_id": shop_id, "top_services": rating_service.get_shop_top_rated_services(shop_id, limit)}
 
 
-# ==================== CUSTOMER: MY RATINGS ====================
+# ── Customer: my ratings ──────────────────────────────────────────────────────
 
 @router.get("/my-ratings")
 def get_my_ratings(
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    rating_repo: RatingRepository = Depends(get_rating_repo),
+    product_repo: ProductRepository = Depends(get_product_repo),
 ):
     """Get all ratings submitted by current customer."""
-    from app.models.ratings import ProductRating, ServiceRating
-    from app.models.product import Product, Service as ServiceModel
-    
-    # Get product ratings
-    product_ratings = session.exec(
-        select(ProductRating).where(
-            ProductRating.customer_id == current_user.user_id
-        ).order_by(ProductRating.created_at.desc())
-    ).all()
-    
-    # Get service ratings
-    service_ratings = session.exec(
-        select(ServiceRating).where(
-            ServiceRating.customer_id == current_user.user_id
-        ).order_by(ServiceRating.created_at.desc())
-    ).all()
-    
-    # Enrich with names
+    product_ratings = rating_repo.get_product_ratings_by_customer(current_user.user_id)
+    service_ratings = rating_repo.get_service_ratings_by_customer(current_user.user_id)
+
     product_results = []
     for r in product_ratings:
-        product = session.get(Product, r.product_id)
+        product = product_repo.get_product(r.product_id)
         product_results.append({
             "id": r.id,
             "type": "product",
@@ -248,12 +200,12 @@ def get_my_ratings(
             "item_name": product.name if product else "Unknown",
             "rating": r.rating,
             "review": r.review,
-            "created_at": r.created_at
+            "created_at": r.created_at,
         })
-    
+
     service_results = []
     for r in service_ratings:
-        service = session.get(ServiceModel, r.service_id)
+        service = product_repo.get_service(r.service_id)
         service_results.append({
             "id": r.id,
             "type": "service",
@@ -261,11 +213,11 @@ def get_my_ratings(
             "item_name": service.name if service else "Unknown",
             "rating": r.rating,
             "review": r.review,
-            "created_at": r.created_at
+            "created_at": r.created_at,
         })
-    
+
     return {
         "product_ratings": product_results,
         "service_ratings": service_results,
-        "total": len(product_results) + len(service_results)
+        "total": len(product_results) + len(service_results),
     }
