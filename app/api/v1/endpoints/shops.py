@@ -6,14 +6,14 @@ from sqlmodel import Session
 from app.db import get_session
 from app.models.shop import ShopCreate, ShopRead, UserShopCreate
 from app.services.shop_service import ShopService
+from app.repositories.shop_repository import ShopRepository
 from app.core.security import get_current_user, TokenData
 
 router = APIRouter(prefix="/shops", tags=["shops"])
 
 
 def get_shop_service(session: Session = Depends(get_session)) -> ShopService:
-    """Dependency to get shop service."""
-    return ShopService(session)
+    return ShopService(ShopRepository(session))
 
 
 @router.post("", response_model=ShopRead, status_code=status.HTTP_201_CREATED)

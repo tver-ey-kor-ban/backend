@@ -12,8 +12,28 @@ from app.models.chat import (
 from app.models.shop import Shop, UserShop
 from app.models.user import User
 from app.core.security import get_current_user, TokenData
+from app.repositories.shop_repository import ShopRepository
+from app.repositories.user_repository import UserRepository
+from app.repositories.notification_repository import NotificationRepository
+from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def get_notification_service(session: Session = Depends(get_session)) -> NotificationService:
+    return NotificationService(
+        NotificationRepository(session),
+        ShopRepository(session),
+        UserRepository(session),
+    )
+
+
+def get_user_repo(session: Session = Depends(get_session)) -> UserRepository:
+    return UserRepository(session)
+
+
+def get_shop_repo(session: Session = Depends(get_session)) -> ShopRepository:
+    return ShopRepository(session)
 
 
 # ==================== CHAT ROOMS ====================
@@ -263,7 +283,10 @@ def send_message(
     room_id: int,
     message_data: ChatMessageCreate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    notification_service: NotificationService = Depends(get_notification_service),
+    user_repo: UserRepository = Depends(get_user_repo),
+    shop_repo: ShopRepository = Depends(get_shop_repo),
 ):
     """Send a message in a chat room."""
     room = session.get(ChatRoom, room_id)
@@ -310,22 +333,15 @@ def send_message(
     session.refresh(message)
     
     # Notify recipient
-    from app.services.notification_service import NotificationService
     from app.models.notification import NotificationType
-    
-    notification_service = NotificationService(session)
-    sender = session.get(User, current_user.user_id)
+
+    sender = user_repo.get_by_id(current_user.user_id)
     sender_name = sender.full_name if sender else "Someone"
-    
+
     # Determine recipient
     if current_user.user_id == room.customer_id:
         # Customer sent message - notify shop members
-        members = session.exec(
-            select(UserShop).where(
-                UserShop.shop_id == room.shop_id,
-                UserShop.is_active
-            )
-        ).all()
+        members = shop_repo.get_active_members(room.shop_id)
         for member in members:
             notification_service.create_notification(
                 user_id=member.user_id,
