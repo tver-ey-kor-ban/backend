@@ -29,10 +29,9 @@ def create_shop(
 
 @router.get("", response_model=List[ShopRead])
 def list_shops(
-    current_user: TokenData = Depends(get_current_user),
     shop_service: ShopService = Depends(get_shop_service)
 ):
-    """List all active shops."""
+    """List all active shops. Public — no token required."""
     return shop_service.get_all_shops()
 
 
@@ -57,10 +56,9 @@ def list_my_shops(
 @router.get("/{shop_id}", response_model=ShopRead)
 def get_shop(
     shop_id: int,
-    current_user: TokenData = Depends(get_current_user),
     shop_service: ShopService = Depends(get_shop_service)
 ):
-    """Get shop details by ID."""
+    """Get shop details by ID. Public — no token required."""
     shop = shop_service.get_shop_by_id(shop_id)
     if not shop or not shop.is_active:
         raise HTTPException(
