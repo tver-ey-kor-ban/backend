@@ -2,25 +2,30 @@ import os
 from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Get database URL from environment or use default
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://postgres:password123@db:5432/mobile_app_db"
+    "DATABASE_URL",
+    "postgresql://postgres:password123@localhost:5432/mobile_app_db"
 )
 
-# Create engine
-engine = create_engine(DATABASE_URL, echo=True)
+# Render and some providers give postgres:// — SQLAlchemy requires postgresql://
+DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Create session factory
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+echo_sql = ENVIRONMENT == "development"
+
+connect_args = {}
+if "pgbouncer=true" in DATABASE_URL or "pooler.supabase.com" in DATABASE_URL:
+    connect_args = {"prepare_threshold": None}
+
+engine = create_engine(DATABASE_URL, echo=echo_sql, connect_args=connect_args)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
-    """Initialize database tables."""
     SQLModel.metadata.create_all(engine)
 
 
 def get_session():
-    """Get database session."""
     with Session(engine) as session:
         yield session
