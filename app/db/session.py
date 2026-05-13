@@ -13,7 +13,11 @@ DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 echo_sql = ENVIRONMENT == "development"
 
-engine = create_engine(DATABASE_URL, echo=echo_sql)
+connect_args = {}
+if "pgbouncer=true" in DATABASE_URL or "pooler.supabase.com" in DATABASE_URL:
+    connect_args = {"prepare_threshold": None}
+
+engine = create_engine(DATABASE_URL, echo=echo_sql, connect_args=connect_args)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
