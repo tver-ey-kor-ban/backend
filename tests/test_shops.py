@@ -204,6 +204,26 @@ class TestShopEndpoints:
         assert response.status_code == 200
         assert "removed" in response.json()["message"]
     
+    def test_list_shops_without_auth(self, client: TestClient, session: Session, shop_owner):
+        """Test listing shops without token (should be public)."""
+        shop = Shop(name="Open Shop", description="Public", address="1 St", owner_id=shop_owner.id)
+        session.add(shop)
+        session.commit()
+
+        response = client.get("/api/v1/shops")
+        assert response.status_code == 200
+
+    def test_get_shop_detail_without_auth(self, client: TestClient, session: Session, shop_owner):
+        """Test getting shop detail without token (should be public)."""
+        shop = Shop(name="Open Detail Shop", description="Public", address="1 St", owner_id=shop_owner.id)
+        session.add(shop)
+        session.commit()
+        session.refresh(shop)
+
+        response = client.get(f"/api/v1/shops/{shop.id}")
+        assert response.status_code == 200
+        assert response.json()["name"] == "Open Detail Shop"
+
     def test_list_shop_mechanics(self, client: TestClient, session: Session, shop_owner, mechanic_user, owner_auth_headers):
         """Test listing shop mechanics."""
         shop = Shop(
