@@ -2,7 +2,7 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session, SQLModel, select
 
 from app.db import get_session
 from app.models.product_order import (
@@ -64,7 +64,16 @@ class UnifiedBookingCreate(SQLModel):
     shop_id: int
     customer_vehicle_id: Optional[int] = None
     vehicle_info: Optional[str] = None
-
+    
+    # Vehicle details (for auto-saving if customer_vehicle_id not provided)
+    vehicle_make: Optional[str] = None
+    vehicle_model: Optional[str] = None
+    vehicle_year: Optional[int] = None
+    vehicle_engine: Optional[str] = None
+    vehicle_fuel_type: Optional[str] = None
+    vehicle_license_plate: Optional[str] = None
+    
+    # Service info (optional - for service appointments)
     service_id: Optional[int] = None
     service_notes: Optional[str] = None
     appointment_date: Optional[datetime] = None
@@ -106,20 +115,40 @@ def create_unified_booking(
         shop_repo.stage_user_shop(
             UserShop(user_id=current_user.user_id, shop_id=booking_data.shop_id, role="customer")
         )
-
-    # Validate customer vehicle if provided
-    if booking_data.customer_vehicle_id:
-        from sqlmodel import select
+    
+    # Handle vehicle - validate existing or auto-save new
+    customer_vehicle_id = booking_data.customer_vehicle_id
+    
+    if customer_vehicle_id:
+        # Validate existing vehicle
         vehicle = order_repo.session.exec(
             select(CustomerVehicle).where(
-                CustomerVehicle.id == booking_data.customer_vehicle_id,
+                CustomerVehicle.id == customer_vehicle_id,
                 CustomerVehicle.customer_id == current_user.user_id,
                 CustomerVehicle.is_active,
             )
         ).first()
         if not vehicle:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
-
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Vehicle not found"
+            )
+    elif booking_data.vehicle_make and booking_data.vehicle_model:
+        # Auto-save new vehicle if make and model provided
+        new_vehicle = CustomerVehicle(
+            customer_id=current_user.user_id,
+            make=booking_data.vehicle_make,
+            model=booking_data.vehicle_model,
+            year=booking_data.vehicle_year,
+            engine=booking_data.vehicle_engine,
+            fuel_type=booking_data.vehicle_fuel_type,
+            license_plate=booking_data.vehicle_license_plate,
+            is_active=True
+        )
+        order_repo.session.add(new_vehicle)
+        order_repo.session.flush()
+        customer_vehicle_id = new_vehicle.id
+    
     # Calculate pricing
     price_calculation = pricing_service.calculate_appointment_price(
         service_id=booking_data.service_id,
@@ -150,7 +179,7 @@ def create_unified_booking(
             shop_id=booking_data.shop_id,
             customer_id=current_user.user_id,
             service_id=booking_data.service_id,
-            customer_vehicle_id=booking_data.customer_vehicle_id,
+            customer_vehicle_id=customer_vehicle_id,
             vehicle_info=booking_data.vehicle_info,
             appointment_date=booking_data.appointment_date or datetime.utcnow(),
             notes=appointment_notes.strip(),
