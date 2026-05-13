@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.db import get_session
 from app.schemas.auth import Token, UserResponse
 from app.services.auth_service import AuthService
+from app.repositories.user_repository import UserRepository
 from app.models.user import UserCreate, UserRead
 from app.core.security import get_current_user, require_admin, TokenData
 
@@ -19,8 +20,7 @@ class RefreshTokenRequest(BaseModel):
 
 
 def get_auth_service(session: Session = Depends(get_session)) -> AuthService:
-    """Dependency to get auth service."""
-    return AuthService(session)
+    return AuthService(UserRepository(session))
 
 
 @router.post("/register", response_model=UserRead)
@@ -77,12 +77,7 @@ def get_me(
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Get current authenticated user."""
-    from app.models.user import User
-    from sqlmodel import select
-    
-    statement = select(User).where(User.username == current_user.username)
-    user = auth_service.session.exec(statement).first()
-    
+    user = auth_service.get_user_by_username(current_user.username)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

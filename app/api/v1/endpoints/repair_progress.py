@@ -12,10 +12,25 @@ from app.models.repair_progress import (
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.user import User
 from app.core.security import get_current_user, TokenData
+from app.repositories.shop_repository import ShopRepository
+from app.repositories.user_repository import UserRepository
+from app.repositories.notification_repository import NotificationRepository
 from app.services.shop_service import ShopService
 from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/repair-progress", tags=["repair-progress"])
+
+
+def get_shop_service(session: Session = Depends(get_session)) -> ShopService:
+    return ShopService(ShopRepository(session))
+
+
+def get_notification_service(session: Session = Depends(get_session)) -> NotificationService:
+    return NotificationService(
+        NotificationRepository(session),
+        ShopRepository(session),
+        UserRepository(session),
+    )
 
 
 # ==================== SHOP: MANAGE REPAIR PROGRESS ====================
@@ -25,11 +40,11 @@ def create_repair_progress(
     shop_id: int,
     progress_data: RepairProgressCreate,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Create a repair progress record for an appointment (Shop only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -88,13 +103,12 @@ def create_repair_progress(
     session.refresh(progress)
     
     # Notify customer
-    notification_service = NotificationService(session)
     from app.models.notification import NotificationType
     from app.models.shop import Shop
-    
+
     shop = session.get(Shop, shop_id)
     shop_name = shop.name if shop else "The shop"
-    
+
     notification_service.create_notification(
         user_id=appointment.customer_id,
         type=NotificationType.STATUS_UPDATE,
@@ -116,12 +130,11 @@ def update_repair_stage(
     progress_id: int,
     update_request: RepairProgressUpdateRequest,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Update repair progress stage (Shop only)."""
-    shop_service = ShopService(session)
-    notification_service = NotificationService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -218,11 +231,10 @@ def get_shop_repair_progress(
     shop_id: int,
     stage: Optional[RepairStage] = None,
     current_user: TokenData = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """Get all repair progress records for a shop (Shop only)."""
-    shop_service = ShopService(session)
-    
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from app.db import init_db, get_session
 from app.api.v1.endpoints import auth, shops, products, services, vehicles, categories, customers, customer_vehicles, product_orders, mechanic_bookings, mechanic_performance, ratings, admin, quotations, repair_progress, invoices, chat
 from app.services.auth_service import AuthService
+from app.repositories.user_repository import UserRepository
 from app.core.vehicle_seeder import seed_vehicles
 from app.core.test_data_seeder import seed_test_data
 from app.models.user import UserCreate
@@ -15,7 +16,7 @@ def create_default_admin():
     """Create default admin account if it doesn't exist."""
     session = next(get_session())
     try:
-        auth_service = AuthService(session)
+        auth_service = AuthService(UserRepository(session))
         
         # Get admin credentials from environment or use defaults
         admin_email = os.getenv("ADMIN_EMAIL", "admin@example.com")
