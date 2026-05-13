@@ -2,7 +2,7 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session, SQLModel, select
 
 from app.db import get_session
 from app.models.product_order import (
@@ -64,7 +64,6 @@ class UnifiedBookingCreate(SQLModel):
     shop_id: int
     customer_vehicle_id: Optional[int] = None
     vehicle_info: Optional[str] = None
-<<<<<<< HEAD
     
     # Vehicle details (for auto-saving if customer_vehicle_id not provided)
     vehicle_make: Optional[str] = None
@@ -75,9 +74,6 @@ class UnifiedBookingCreate(SQLModel):
     vehicle_license_plate: Optional[str] = None
     
     # Service info (optional - for service appointments)
-=======
-
->>>>>>> 0d029f616eb7b0c534aa90153fa5c13416944b1b
     service_id: Optional[int] = None
     service_notes: Optional[str] = None
     appointment_date: Optional[datetime] = None
@@ -119,23 +115,13 @@ def create_unified_booking(
         shop_repo.stage_user_shop(
             UserShop(user_id=current_user.user_id, shop_id=booking_data.shop_id, role="customer")
         )
-<<<<<<< HEAD
-        session.add(user_shop)
-        session.flush()
     
     # Handle vehicle - validate existing or auto-save new
     customer_vehicle_id = booking_data.customer_vehicle_id
     
     if customer_vehicle_id:
         # Validate existing vehicle
-        vehicle = session.exec(
-=======
-
-    # Validate customer vehicle if provided
-    if booking_data.customer_vehicle_id:
-        from sqlmodel import select
         vehicle = order_repo.session.exec(
->>>>>>> 0d029f616eb7b0c534aa90153fa5c13416944b1b
             select(CustomerVehicle).where(
                 CustomerVehicle.id == customer_vehicle_id,
                 CustomerVehicle.customer_id == current_user.user_id,
@@ -143,7 +129,6 @@ def create_unified_booking(
             )
         ).first()
         if not vehicle:
-<<<<<<< HEAD
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vehicle not found"
@@ -160,14 +145,10 @@ def create_unified_booking(
             license_plate=booking_data.vehicle_license_plate,
             is_active=True
         )
-        session.add(new_vehicle)
-        session.flush()
+        order_repo.session.add(new_vehicle)
+        order_repo.session.flush()
         customer_vehicle_id = new_vehicle.id
     
-=======
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
-
->>>>>>> 0d029f616eb7b0c534aa90153fa5c13416944b1b
     # Calculate pricing
     price_calculation = pricing_service.calculate_appointment_price(
         service_id=booking_data.service_id,

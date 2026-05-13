@@ -2,7 +2,7 @@
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
 
-from app.models.user import User, UserCreate
+from app.models.user import User
 from app.models.shop import Shop, UserShop, ShopRole
 from app.models.product import Product, Service
 from app.models.category import ProductCategory
