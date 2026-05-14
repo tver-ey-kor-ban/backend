@@ -47,91 +47,219 @@ def get_order_repo(session: Session = Depends(get_session)) -> OrderRepository:
 @router.get("/shops/{shop_id}/browse/products")
 def browse_products(
     shop_id: int,
+    search: Optional[str] = Query(None, description="Search by name or description"),
+    q: Optional[str] = Query(None, include_in_schema=False),  # legacy alias
     category_id: Optional[int] = None,
-    q: Optional[str] = Query(None, description="Search query"),
-    session: Session = Depends(get_session)
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    session: Session = Depends(get_session),
 ):
     """Browse products in a shop (PUBLIC - no login required)."""
     from app.models.product import Product
-    
-    query = select(Product).where(
-        Product.shop_id == shop_id,
-        Product.is_active
-    )
-    
+    from app.models.ratings import ProductRating
+    from sqlalchemy import func
+
+    term = search or q
+    conditions = [Product.shop_id == shop_id, Product.is_active]
     if category_id:
-        query = query.where(Product.category_id == category_id)
-    
-    if q:
-        query = query.where(
-            Product.name.ilike(f"%{q}%") | 
-            Product.description.ilike(f"%{q}%")
+        conditions.append(Product.category_id == category_id)
+    if term:
+        conditions.append(
+            Product.name.ilike(f"%{term}%") | Product.description.ilike(f"%{term}%")
         )
-    
-    products = session.exec(query).all()
-    return [
+
+    total = session.execute(
+        select(func.count()).select_from(Product).where(*conditions)
+    ).scalar() or 0
+
+    offset = (page - 1) * limit
+    stmt = (
+        select(
+            Product,
+            func.coalesce(func.avg(ProductRating.rating), 0.0).label("avg_rating"),
+            func.count(ProductRating.id).label("rating_count"),
+        )
+        .outerjoin(ProductRating, ProductRating.product_id == Product.id)
+        .where(*conditions)
+        .group_by(Product.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = session.execute(stmt).all()
+
+    items = [
         {
-            "id": p.id,
-            "name": p.name,
-            "description": p.description,
-            "price": p.price,
-            "image_url": p.image_url,
-            "thumbnail_url": p.thumbnail_url
+            "id": row.Product.id,
+            "name": row.Product.name,
+            "description": row.Product.description,
+            "price": row.Product.price,
+            "image_url": row.Product.image_url,
+            "thumbnail_url": row.Product.thumbnail_url,
+            "is_available": row.Product.is_active and row.Product.stock_quantity > 0,
+            "stock_quantity": row.Product.stock_quantity,
+            "rating": round(float(row.avg_rating), 1),
+            "rating_count": row.rating_count,
         }
-        for p in products
+        for row in rows
     ]
+    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
 @router.get("/shops/{shop_id}/browse/services")
 def browse_services(
     shop_id: int,
-    session: Session = Depends(get_session)
+    search: Optional[str] = Query(None, description="Search by name or description"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    session: Session = Depends(get_session),
 ):
     """Browse services in a shop (PUBLIC - no login required)."""
     from app.models.product import Service
-    
-    services = session.exec(
-        select(Service).where(
-            Service.shop_id == shop_id,
-            Service.is_active
+    from app.models.ratings import ServiceRating
+    from sqlalchemy import func
+
+    conditions = [Service.shop_id == shop_id, Service.is_active]
+    if search:
+        conditions.append(
+            Service.name.ilike(f"%{search}%") | Service.description.ilike(f"%{search}%")
         )
-    ).all()
-    
-    return [
+
+    total = session.execute(
+        select(func.count()).select_from(Service).where(*conditions)
+    ).scalar() or 0
+
+    offset = (page - 1) * limit
+    stmt = (
+        select(
+            Service,
+            func.coalesce(func.avg(ServiceRating.rating), 0.0).label("avg_rating"),
+            func.count(ServiceRating.id).label("rating_count"),
+        )
+        .outerjoin(ServiceRating, ServiceRating.service_id == Service.id)
+        .where(*conditions)
+        .group_by(Service.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = session.execute(stmt).all()
+
+    items = [
         {
-            "id": s.id,
-            "name": s.name,
-            "description": s.description,
-            "price": s.price,
-            "duration_minutes": s.duration_minutes,
-            "image_url": s.image_url
+            "id": row.Service.id,
+            "name": row.Service.name,
+            "description": row.Service.description,
+            "price": row.Service.price,
+            "estimated_duration_minutes": row.Service.duration_minutes,
+            "service_type": row.Service.service_type,
+            "image_url": row.Service.image_url,
+            "is_available": row.Service.is_active,
+            "rating": round(float(row.avg_rating), 1),
+            "rating_count": row.rating_count,
         }
-        for s in services
+        for row in rows
     ]
+    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
 @router.get("/shops/{shop_id}/browse/shop-info")
 def browse_shop_info(
     shop_id: int,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
 ):
     """Get public shop information (PUBLIC - no login required)."""
     from app.models.shop import Shop
-    
+
     shop = session.get(Shop, shop_id)
     if not shop or not shop.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Shop not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found")
+
     return {
         "id": shop.id,
         "name": shop.name,
         "description": shop.description,
         "address": shop.address,
         "phone": shop.phone,
-        "email": shop.email
+        "email": shop.email,
+        "is_active": shop.is_active,
+        "created_at": shop.created_at,
+    }
+
+
+@router.get("/shops/{shop_id}/browse/products/{product_id}")
+def browse_product_detail(
+    shop_id: int,
+    product_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get a single product detail (PUBLIC - no login required)."""
+    from app.models.product import Product
+    from app.models.ratings import ProductRating
+    from sqlalchemy import func
+
+    stmt = (
+        select(
+            Product,
+            func.coalesce(func.avg(ProductRating.rating), 0.0).label("avg_rating"),
+            func.count(ProductRating.id).label("rating_count"),
+        )
+        .outerjoin(ProductRating, ProductRating.product_id == Product.id)
+        .where(Product.id == product_id, Product.shop_id == shop_id, Product.is_active)
+        .group_by(Product.id)
+    )
+    row = session.execute(stmt).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+    return {
+        "id": row.Product.id,
+        "name": row.Product.name,
+        "description": row.Product.description,
+        "price": row.Product.price,
+        "image_url": row.Product.image_url,
+        "thumbnail_url": row.Product.thumbnail_url,
+        "is_available": row.Product.is_active and row.Product.stock_quantity > 0,
+        "stock_quantity": row.Product.stock_quantity,
+        "rating": round(float(row.avg_rating), 1),
+        "rating_count": row.rating_count,
+    }
+
+
+@router.get("/shops/{shop_id}/browse/services/{service_id}")
+def browse_service_detail(
+    shop_id: int,
+    service_id: int,
+    session: Session = Depends(get_session),
+):
+    """Get a single service detail (PUBLIC - no login required)."""
+    from app.models.product import Service
+    from app.models.ratings import ServiceRating
+    from sqlalchemy import func
+
+    stmt = (
+        select(
+            Service,
+            func.coalesce(func.avg(ServiceRating.rating), 0.0).label("avg_rating"),
+            func.count(ServiceRating.id).label("rating_count"),
+        )
+        .outerjoin(ServiceRating, ServiceRating.service_id == Service.id)
+        .where(Service.id == service_id, Service.shop_id == shop_id, Service.is_active)
+        .group_by(Service.id)
+    )
+    row = session.execute(stmt).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+
+    return {
+        "id": row.Service.id,
+        "name": row.Service.name,
+        "description": row.Service.description,
+        "price": row.Service.price,
+        "estimated_duration_minutes": row.Service.duration_minutes,
+        "service_type": row.Service.service_type,
+        "image_url": row.Service.image_url,
+        "is_available": row.Service.is_active,
+        "rating": round(float(row.avg_rating), 1),
+        "rating_count": row.rating_count,
     }
 
 

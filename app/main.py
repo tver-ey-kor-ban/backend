@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.db import init_db, get_session
-from app.api.v1.endpoints import auth, shops, products, services, vehicles, categories, customers, customer_vehicles, product_orders, mechanic_bookings, mechanic_performance, ratings, admin, quotations, repair_progress, invoices, chat
+from app.api.v1.endpoints import auth, shops, products, services, vehicles, categories, customers, customer_vehicles, product_orders, mechanic_bookings, mechanic_performance, ratings, admin, quotations, repair_progress, invoices, chat, search
 from app.services.auth_service import AuthService
 from app.repositories.user_repository import UserRepository
 from app.core.vehicle_seeder import seed_vehicles
@@ -138,6 +138,9 @@ app.include_router(invoices.router, prefix="/api/v1", tags=["invoices"])
 
 # Include chat routes
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+
+# Include global search route
+app.include_router(search.router, prefix="/api/v1", tags=["search"])
 
 
 @app.get("/")

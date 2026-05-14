@@ -1,6 +1,5 @@
 """Shop endpoints for Owner/Mechanic management."""
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.db import get_session
@@ -27,12 +26,15 @@ def create_shop(
     return shop
 
 
-@router.get("", response_model=List[ShopRead])
+@router.get("")
 def list_shops(
-    shop_service: ShopService = Depends(get_shop_service)
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    shop_service: ShopService = Depends(get_shop_service),
 ):
     """List all active shops. Public — no token required."""
-    return shop_service.get_all_shops()
+    shops, total = shop_service.get_all_shops_paginated(page, limit)
+    return {"items": shops, "total": total, "page": page, "limit": limit}
 
 
 @router.get("/my-shops")

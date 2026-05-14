@@ -1,4 +1,5 @@
-from typing import Optional, List
+from typing import Optional, List, Tuple
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.models.shop import Shop, UserShop
@@ -15,6 +16,16 @@ class ShopRepository:
         return self.session.exec(
             select(Shop).where(Shop.is_active)
         ).all()
+
+    def get_all_active_paginated(self, page: int, limit: int) -> Tuple[List[Shop], int]:
+        total = self.session.execute(
+            select(func.count()).select_from(Shop).where(Shop.is_active)
+        ).scalar() or 0
+        offset = (page - 1) * limit
+        shops = self.session.exec(
+            select(Shop).where(Shop.is_active).offset(offset).limit(limit)
+        ).all()
+        return shops, total
 
     def save(self, shop: Shop) -> Shop:
         self.session.add(shop)

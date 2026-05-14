@@ -37,22 +37,18 @@ class TestShopEndpoints:
         assert response.status_code == 401
     
     def test_list_shops(self, client: TestClient, session: Session, shop_owner, owner_auth_headers):
-        """Test listing shops with authentication."""
-        # Create a shop first
-        shop = Shop(
-            name="Public Shop",
-            description="Test shop",
-            address="123 St",
-            owner_id=shop_owner.id
-        )
+        """Test listing shops returns paginated envelope."""
+        shop = Shop(name="Public Shop", description="Test shop", address="123 St")
         session.add(shop)
         session.commit()
-        
+
         response = client.get("/api/v1/shops", headers=owner_auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert len(data) >= 1
-        assert any(s["name"] == "Public Shop" for s in data)
+        assert "items" in data
+        assert "total" in data
+        assert data["total"] >= 1
+        assert any(s["name"] == "Public Shop" for s in data["items"])
     
     def test_get_shop_detail(self, client: TestClient, session: Session, shop_owner, owner_auth_headers):
         """Test getting shop details."""
