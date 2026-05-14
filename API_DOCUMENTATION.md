@@ -27,20 +27,21 @@
 6. [Vehicle Database (Public)](#6-vehicle-database-public)
 7. [Customer Vehicles](#7-customer-vehicles)
 8. [Browse Shop (Public)](#8-browse-shop-public)
-9. [Unified Booking](#9-unified-booking)
-10. [Customer Appointments](#10-customer-appointments)
-11. [Customer Product Orders](#11-customer-product-orders)
-12. [Mechanic / Shop — Bookings](#12-mechanic--shop--bookings)
-13. [Mechanic / Shop — Orders](#13-mechanic--shop--orders)
-14. [Notifications](#14-notifications)
-15. [Quotations](#15-quotations)
-16. [Repair Progress](#16-repair-progress)
-17. [Invoices](#17-invoices)
-18. [Chat / Support](#18-chat--support)
-19. [Ratings](#19-ratings)
-20. [Mechanic Performance](#20-mechanic-performance)
-21. [Admin](#21-admin)
-22. [Error Format & Status Codes](#error-format--status-codes)
+9. [Global Search (Public)](#9-global-search-public)
+10. [Unified Booking](#10-unified-booking)
+11. [Customer Appointments](#11-customer-appointments)
+12. [Customer Product Orders](#12-customer-product-orders)
+13. [Mechanic / Shop — Bookings](#13-mechanic--shop--bookings)
+14. [Mechanic / Shop — Orders](#14-mechanic--shop--orders)
+15. [Notifications](#15-notifications)
+16. [Quotations](#16-quotations)
+17. [Repair Progress](#17-repair-progress)
+18. [Invoices](#18-invoices)
+19. [Chat / Support](#19-chat--support)
+20. [Ratings](#20-ratings)
+21. [Mechanic Performance](#21-mechanic-performance)
+22. [Admin](#22-admin)
+23. [Error Format & Status Codes](#error-format--status-codes)
 
 ---
 
@@ -97,11 +98,26 @@
 ### Refresh Token
 `POST /auth/refresh`
 
+**Content-Type:** `application/json`
+
+**Request body:**
 ```json
 { "refresh_token": "eyJhbGci..." }
 ```
 
-**Response** — same shape as login.
+**Response** `200` — returns a new access token only (refresh token is **not** rotated):
+```json
+{
+  "access_token": "eyJhbGci...",
+  "token_type": "bearer"
+}
+```
+
+**Error:** `401 Unauthorized` when the refresh token is expired, revoked, or invalid.
+
+**Token expiry:**
+- Access token: **30 minutes**
+- Refresh token: **7 days**
 
 ---
 
@@ -151,25 +167,35 @@
 ## 2. Shops
 
 ### List All Shops
-`GET /shops` 🔒
+`GET /shops` — **Public, no token required**
+
+| Query Param | Type | Default | Description |
+|-------------|------|---------|-------------|
+| `page` | integer | `1` | Page number |
+| `limit` | integer | `20` (max `100`) | Items per page |
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "Test Garage",
-    "address": "123 Test Street",
-    "phone": "+1234567890",
-    "email": "garage@test.com",
-    "is_active": true
-  }
-]
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Test Garage",
+      "address": "123 Test Street",
+      "phone": "+1234567890",
+      "email": "garage@test.com",
+      "is_active": true
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "limit": 20
+}
 ```
 
 ---
 
 ### Get Shop Details
-`GET /shops/{shop_id}` 🔒
+`GET /shops/{shop_id}` — **Public, no token required**
 
 ---
 
@@ -433,46 +459,84 @@ No authentication required.
 
 ## 8. Browse Shop (Public)
 
-No authentication required.
+No authentication required. All browse endpoints return paginated envelopes.
 
 ### Browse Products
 `GET /customers/shops/{shop_id}/browse/products`
 
 | Query Param | Type | Description |
 |-------------|------|-------------|
+| `search` | string | Case-insensitive match on name/description *(optional)* |
 | `category_id` | integer | Filter by category *(optional)* |
-| `q` | string | Search keyword *(optional)* |
+| `page` | integer | Default `1` |
+| `limit` | integer | Default `20` (max `100`) |
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "Synthetic Oil 5W-30",
-    "description": "Full synthetic motor oil",
-    "price": 29.99,
-    "image_url": "...",
-    "thumbnail_url": "..."
-  }
-]
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Synthetic Oil 5W-30",
+      "description": "Full synthetic motor oil",
+      "price": 29.99,
+      "image_url": "...",
+      "thumbnail_url": "...",
+      "is_available": true,
+      "stock_quantity": 50,
+      "rating": 4.3,
+      "rating_count": 12
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "limit": 20
+}
 ```
+
+### Browse Single Product
+`GET /customers/shops/{shop_id}/browse/products/{product_id}`
+
+Returns a single product object (same shape as items above).
 
 ---
 
 ### Browse Services
 `GET /customers/shops/{shop_id}/browse/services`
 
+| Query Param | Type | Description |
+|-------------|------|-------------|
+| `search` | string | Case-insensitive match on name/description *(optional)* |
+| `page` | integer | Default `1` |
+| `limit` | integer | Default `20` (max `100`) |
+
 ```json
-[
-  {
-    "id": 1,
-    "name": "Oil Change",
-    "description": "Full oil change with filter",
-    "price": 39.99,
-    "duration_minutes": 30,
-    "image_url": "..."
-  }
-]
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Oil Change",
+      "description": "Full oil change with filter",
+      "price": 39.99,
+      "estimated_duration_minutes": 30,
+      "service_type": "shop_based",
+      "image_url": "...",
+      "is_available": true,
+      "rating": 4.7,
+      "rating_count": 30
+    }
+  ],
+  "total": 8,
+  "page": 1,
+  "limit": 20
+}
 ```
+
+> `service_type`: `"shop_based"` · `"mobile"` · `"pickup_drop"`
+
+### Browse Single Service
+`GET /customers/shops/{shop_id}/browse/services/{service_id}`
+
+Returns a single service object (same shape as items above).
 
 ---
 
@@ -486,13 +550,69 @@ No authentication required.
   "description": "...",
   "address": "123 Test St",
   "phone": "+1234567890",
-  "email": "garage@test.com"
+  "email": "garage@test.com",
+  "is_active": true,
+  "created_at": "2024-01-01T00:00:00"
 }
 ```
 
 ---
 
-## 9. Unified Booking
+## 9. Global Search (Public)
+
+No authentication required. Searches products and/or services **across all active shops**.
+
+`GET /search`
+
+| Query Param | Type | Values | Default | Description |
+|-------------|------|--------|---------|-------------|
+| `q` | string | — | **required** | Search term (min 1 char) |
+| `type` | string | `products` · `services` · `all` | `all` | Filter result type |
+| `page` | integer | — | `1` | Page number |
+| `limit` | integer | — | `20` (max `100`) | Items per page |
+
+```json
+{
+  "items": [
+    {
+      "type": "product",
+      "id": 5,
+      "name": "Oil Filter",
+      "description": "OEM quality",
+      "price": 15.99,
+      "image_url": "...",
+      "is_available": true,
+      "stock_quantity": 40,
+      "rating": 4.3,
+      "rating_count": 12,
+      "shop": { "id": 2, "name": "Toyota Service Center", "address": "123 Main St" }
+    },
+    {
+      "type": "service",
+      "id": 3,
+      "name": "Oil Change",
+      "description": "Full synthetic oil change",
+      "price": 49.99,
+      "estimated_duration_minutes": 30,
+      "service_type": "shop_based",
+      "image_url": "...",
+      "is_available": true,
+      "rating": 4.7,
+      "rating_count": 30,
+      "shop": { "id": 2, "name": "Toyota Service Center", "address": "123 Main St" }
+    }
+  ],
+  "total": 54,
+  "page": 1,
+  "limit": 20
+}
+```
+
+> When `type=all`, results are interleaved (up to `limit/2` products + `limit/2` services per page). Use `type=products` or `type=services` for accurate single-type pagination.
+
+---
+
+## 10. Unified Booking
 
 ### Create Booking
 `POST /product-orders/unified-booking` 🔒
@@ -1216,6 +1336,30 @@ Returns own summary + rank within the shop.
   "total_revenue": 15240.50
 }
 ```
+
+---
+
+## Additional Notes
+
+### `GET /shops/{shop_id}/products/search` — Auth requirement
+This endpoint requires a valid Bearer token **and** shop membership (owner or mechanic). It is a **shop-management** endpoint, not public. For customer-facing product search use:
+- `GET /customers/shops/{shop_id}/browse/products?search=...` (public, per-shop)
+- `GET /search?q=...` (public, cross-shop)
+
+### Image Search (`POST /shops/{shop_id}/products/search-by-image`)
+The endpoint exists but is a **placeholder** — it currently returns products that have images attached. Full ML-based visual search is not yet implemented. The mobile client should hide this feature until the endpoint is production-ready.
+
+### Categories (`GET /categories`)
+Returns root-level product categories. Use `GET /categories/tree` for the full nested tree.
+
+```json
+[
+  { "id": 1, "name": "Engine Parts", "description": "...", "parent_id": null, "shop_id": 1 },
+  { "id": 2, "name": "Filters",      "description": "...", "parent_id": null, "shop_id": 1 }
+]
+```
+
+Pass `category_id` to `GET /customers/shops/{id}/browse/products?category_id=1` to filter products by category.
 
 ---
 

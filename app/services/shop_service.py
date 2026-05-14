@@ -24,6 +24,9 @@ class ShopService:
     def get_all_shops(self) -> List[Shop]:
         return self.shop_repo.get_all_active()
 
+    def get_all_shops_paginated(self, page: int, limit: int):
+        return self.shop_repo.get_all_active_paginated(page, limit)
+
     def get_user_shops(self, user_id: int) -> List[UserShop]:
         return self.shop_repo.get_user_assignments(user_id)
 
