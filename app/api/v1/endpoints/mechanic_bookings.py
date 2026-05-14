@@ -46,21 +46,26 @@ def get_product_repo(session: Session = Depends(get_session)) -> ProductReposito
 @router.get("/shops/{shop_id}/pending-bookings")
 def get_pending_bookings(
     shop_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
     current_user: TokenData = Depends(get_current_user),
     shop_service: ShopService = Depends(get_shop_service),
     user_repo: UserRepository = Depends(get_user_repo),
     order_repo: OrderRepository = Depends(get_order_repo),
 ):
-    """Get all pending bookings for mechanics to review (Owner/Mechanic only)."""
+    """Get pending bookings for mechanics to review (Owner/Mechanic only)."""
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only shop members can view bookings")
 
-    appointments = order_repo.get_appointments_by_shop_and_status(shop_id, AppointmentStatus.PENDING)
+    all_appointments = order_repo.get_appointments_by_shop_and_status(shop_id, AppointmentStatus.PENDING)
+    total = len(all_appointments)
+    offset = (page - 1) * limit
+    appointments = all_appointments[offset: offset + limit]
 
-    result = []
+    items = []
     for appt in appointments:
         customer = user_repo.get_by_id(appt.customer_id)
-        result.append({
+        items.append({
             "appointment_id": appt.id,
             "customer": {
                 "id": appt.customer_id,
@@ -76,7 +81,7 @@ def get_pending_bookings(
             "notes": appt.notes,
         })
 
-    return {"count": len(result), "bookings": result}
+    return {"total": total, "page": page, "limit": limit, "items": items}
 
 
 @router.get("/shops/{shop_id}/bookings/{appointment_id}")
@@ -171,7 +176,7 @@ def handle_booking_action(
         )
 
     elif action_request.action == "reject":
-        appointment.status = AppointmentStatus.CANCELLED
+        appointment.status = AppointmentStatus.REJECTED
         appointment.updated_at = datetime.utcnow()
         order_repo.update_appointment(appointment)
 
@@ -182,7 +187,7 @@ def handle_booking_action(
             success=True,
             message="Booking rejected",
             appointment_id=appointment.id,
-            new_status="cancelled",
+            new_status="rejected",
             customer_notified=True,
         )
 
@@ -245,24 +250,29 @@ def mark_notification_read(
 @router.get("/shops/{shop_id}/pending-orders")
 def get_pending_product_orders(
     shop_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
     current_user: TokenData = Depends(get_current_user),
     shop_service: ShopService = Depends(get_shop_service),
     user_repo: UserRepository = Depends(get_user_repo),
     order_repo: OrderRepository = Depends(get_order_repo),
 ):
-    """Get all pending product orders for shop to review."""
+    """Get pending product orders for shop to review."""
     from app.models.product_order import OrderStatus
 
     if not shop_service.is_shop_member(current_user.user_id, shop_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only shop members can view orders")
 
-    orders = order_repo.get_orders_by_shop_and_status(shop_id, OrderStatus.PENDING)
+    all_orders = order_repo.get_orders_by_shop_and_status(shop_id, OrderStatus.PENDING)
+    total = len(all_orders)
+    offset = (page - 1) * limit
+    orders = all_orders[offset: offset + limit]
 
-    result = []
+    items = []
     for order in orders:
         customer = user_repo.get_by_id(order.customer_id)
-        items = order_repo.get_order_items(order.id)
-        result.append({
+        order_items = order_repo.get_order_items(order.id)
+        items.append({
             "order_id": order.id,
             "customer": {
                 "id": order.customer_id,
@@ -272,11 +282,11 @@ def get_pending_product_orders(
             "total_amount": order.total_amount,
             "pickup_date": order.pickup_date,
             "created_at": order.created_at,
-            "items_count": len(items),
+            "items_count": len(order_items),
             "notes": order.notes,
         })
 
-    return {"count": len(result), "orders": result}
+    return {"total": total, "page": page, "limit": limit, "items": items}
 
 
 class ProductOrderActionRequest(SQLModel):

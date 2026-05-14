@@ -15,6 +15,7 @@ class AppointmentStatus(str, Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    REJECTED = "rejected"
 
 
 class AppointmentBase(SQLModel):
