@@ -1,7 +1,7 @@
 """Local Authentication endpoints (JWT with username/password)."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlmodel import Session
+from sqlmodel import Session, select
 from pydantic import BaseModel
 
 from app.db import get_session
@@ -9,6 +9,7 @@ from app.schemas.auth import Token, UserResponse
 from app.services.auth_service import AuthService
 from app.repositories.user_repository import UserRepository
 from app.models.user import UserCreate, UserRead
+from app.models.shop import UserShop
 from app.core.security import get_current_user, require_admin, TokenData
 
 router = APIRouter(tags=["authentication"])
@@ -87,12 +88,30 @@ def get_me(
 
 
 @router.get("/me/roles")
-def get_my_roles(current_user: TokenData = Depends(get_current_user)):
-    """Get current user's roles from JWT token."""
+def get_my_roles(
+    current_user: TokenData = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Get current user's roles including all shop memberships."""
+    memberships = session.exec(
+        select(UserShop).where(
+            UserShop.user_id == current_user.user_id,
+            UserShop.is_active,
+        )
+    ).all()
+
+    shop_roles = [{"shop_id": m.shop_id, "role": m.role} for m in memberships]
+
+    roles = list(current_user.roles)
+    for m in memberships:
+        if m.role not in roles:
+            roles.append(m.role)
+
     return {
         "username": current_user.username,
-        "roles": current_user.roles,
-        "is_superuser": current_user.is_superuser
+        "roles": roles,
+        "is_superuser": current_user.is_superuser,
+        "shop_roles": shop_roles,
     }
 
 

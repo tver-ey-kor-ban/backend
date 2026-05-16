@@ -1,9 +1,13 @@
 """Shop endpoints for Owner/Mechanic management."""
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlmodel import Session
+from sqlmodel import Session, select
+from sqlalchemy import func
 
 from app.db import get_session
 from app.models.shop import ShopCreate, ShopRead, UserShopCreate
+from app.models.appointment import Appointment, AppointmentStatus
+from app.models.product_order import ProductOrder, OrderStatus
+from app.models.product import Product, Service
 from app.services.shop_service import ShopService
 from app.repositories.shop_repository import ShopRepository
 from app.core.security import get_current_user, TokenData
@@ -115,6 +119,97 @@ def delete_shop(
             detail="Shop not found"
         )
     return {"message": "Shop deleted successfully"}
+
+
+@router.get("/{shop_id}/statistics")
+def get_shop_statistics(
+    shop_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    shop_service: ShopService = Depends(get_shop_service),
+    session: Session = Depends(get_session),
+):
+    """Get statistics for a shop. Owner/Mechanic only."""
+    if not shop_service.is_shop_member(current_user.user_id, shop_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only shop members can view shop statistics",
+        )
+
+    shop = shop_service.get_shop_by_id(shop_id)
+    if not shop:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shop not found")
+
+    def appt_count(appt_status):
+        return session.exec(
+            select(func.count()).select_from(Appointment).where(
+                Appointment.shop_id == shop_id,
+                Appointment.status == appt_status,
+            )
+        ).one() or 0
+
+    def order_count(order_status):
+        return session.exec(
+            select(func.count()).select_from(ProductOrder).where(
+                ProductOrder.shop_id == shop_id,
+                ProductOrder.status == order_status,
+            )
+        ).one() or 0
+
+    total_appts = session.exec(
+        select(func.count()).select_from(Appointment).where(Appointment.shop_id == shop_id)
+    ).one() or 0
+    total_orders = session.exec(
+        select(func.count()).select_from(ProductOrder).where(ProductOrder.shop_id == shop_id)
+    ).one() or 0
+
+    appt_revenue = session.exec(
+        select(func.sum(Appointment.total_amount)).where(
+            Appointment.shop_id == shop_id,
+            Appointment.status == AppointmentStatus.COMPLETED,
+        )
+    ).one() or 0.0
+
+    order_revenue = session.exec(
+        select(func.sum(ProductOrder.total_amount)).where(
+            ProductOrder.shop_id == shop_id,
+            ProductOrder.status == OrderStatus.COMPLETED,
+        )
+    ).one() or 0.0
+
+    product_count = session.exec(
+        select(func.count()).select_from(Product).where(Product.shop_id == shop_id)
+    ).one() or 0
+    service_count = session.exec(
+        select(func.count()).select_from(Service).where(Service.shop_id == shop_id)
+    ).one() or 0
+
+    return {
+        "shop_id": shop_id,
+        "appointments": {
+            "total": total_appts,
+            "pending": appt_count(AppointmentStatus.PENDING),
+            "confirmed": appt_count(AppointmentStatus.CONFIRMED),
+            "completed": appt_count(AppointmentStatus.COMPLETED),
+            "cancelled": appt_count(AppointmentStatus.CANCELLED),
+            "rejected": appt_count(AppointmentStatus.REJECTED),
+        },
+        "orders": {
+            "total": total_orders,
+            "pending": order_count(OrderStatus.PENDING),
+            "confirmed": order_count(OrderStatus.CONFIRMED),
+            "processing": order_count(OrderStatus.PROCESSING),
+            "ready": order_count(OrderStatus.READY),
+            "completed": order_count(OrderStatus.COMPLETED),
+            "cancelled": order_count(OrderStatus.CANCELLED),
+        },
+        "revenue": {
+            "appointments": float(appt_revenue),
+            "orders": float(order_revenue),
+            "total": float(appt_revenue + order_revenue),
+        },
+        "products": product_count,
+        "services": service_count,
+    }
 
 
 # Member management endpoints
