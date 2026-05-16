@@ -18,10 +18,10 @@ class TestAdminUserManagement:
         response = client.get("/api/v1/admin/users", headers=admin_auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "users" in data
+        assert "items" in data
         assert "total" in data
-        assert len(data["users"]) >= 1
-    
+        assert len(data["items"]) >= 1
+
     def test_list_users_with_search(self, client: TestClient, admin_user, admin_auth_headers):
         """Test searching users as admin."""
         response = client.get(
@@ -30,7 +30,7 @@ class TestAdminUserManagement:
         )
         assert response.status_code == 200
         data = response.json()
-        assert len(data["users"]) >= 1
+        assert len(data["items"]) >= 1
     
     def test_get_user_details_as_admin(self, client: TestClient, admin_user, shop_owner, admin_auth_headers):
         """Test getting user details as admin."""
@@ -129,7 +129,7 @@ class TestAdminShopManagement:
         response = client.get("/api/v1/admin/shops", headers=admin_auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "shops" in data
+        assert "items" in data
         assert "total" in data
     
     def test_get_shop_details_as_admin(self, client: TestClient, session: Session, admin_user, shop_owner, admin_auth_headers):
@@ -222,7 +222,7 @@ class TestAdminBookingsAndOrders:
         response = client.get("/api/v1/admin/appointments", headers=admin_auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "appointments" in data
+        assert "items" in data
         assert "total" in data
     
     def test_list_all_orders(self, client: TestClient, session: Session, admin_user, shop_owner, customer_user, admin_auth_headers):
@@ -245,7 +245,7 @@ class TestAdminBookingsAndOrders:
         response = client.get("/api/v1/admin/orders", headers=admin_auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "orders" in data
+        assert "items" in data
         assert "total" in data
 
 

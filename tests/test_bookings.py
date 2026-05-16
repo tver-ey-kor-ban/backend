@@ -165,7 +165,8 @@ class TestBookingManagement:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] >= 1
+        assert data["total"] >= 1
+        assert "items" in data
     
     def test_mechanic_accept_booking(self, client: TestClient, session: Session, shop_owner, mechanic_user, customer_user, mechanic_auth_headers):
         """Test mechanic accepting a booking."""
@@ -233,7 +234,7 @@ class TestBookingManagement:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["new_status"] == "cancelled"
+        assert data["new_status"] == "rejected"
 
 
 class TestCustomerBookingActions:

@@ -242,7 +242,6 @@ def list_all_shops(
                 "id": s.id,
                 "name": s.name,
                 "address": s.address,
-                "owner_id": s.owner_id,
                 "is_active": s.is_active,
                 "created_at": s.created_at.isoformat() if s.created_at else None
             }
@@ -492,7 +491,23 @@ def get_daily_statistics(
         select(func.count(ProductOrder.id))
         .where(ProductOrder.created_at >= start_date)
     ).one()
-    
+
+    appt_revenue = session.exec(
+        select(func.sum(Appointment.total_amount))
+        .where(
+            Appointment.status == AppointmentStatus.COMPLETED,
+            Appointment.created_at >= start_date,
+        )
+    ).one() or 0.0
+
+    order_revenue = session.exec(
+        select(func.sum(ProductOrder.total_amount))
+        .where(
+            ProductOrder.status == OrderStatus.COMPLETED,
+            ProductOrder.created_at >= start_date,
+        )
+    ).one() or 0.0
+
     return {
         "period_days": days,
         "start_date": start_date.isoformat(),
@@ -500,7 +515,12 @@ def get_daily_statistics(
         "new_users": new_users,
         "new_shops": new_shops,
         "new_appointments": new_appointments,
-        "new_orders": new_orders
+        "new_orders": new_orders,
+        "revenue": {
+            "appointments": float(appt_revenue),
+            "orders": float(order_revenue),
+            "total": float(appt_revenue + order_revenue),
+        },
     }
 
 
@@ -552,7 +572,7 @@ def list_all_appointments(
 
 @router.get("/orders", response_model=dict)
 def list_all_orders(
-    skip: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[OrderStatus] = None,
     shop_id: Optional[int] = None,
@@ -561,27 +581,24 @@ def list_all_orders(
 ):
     """List all product orders across all shops. Admin only."""
     query = select(ProductOrder)
-    
+
     if status:
         query = query.where(ProductOrder.status == status)
-    
+
     if shop_id:
         query = query.where(ProductOrder.shop_id == shop_id)
-    
-    # Get total count
-    total_count = session.exec(
-        select(func.count(ProductOrder.id))
-    ).one()
-    
-    # Get paginated results
-    query = query.offset(skip).limit(limit).order_by(desc(ProductOrder.created_at))
+
+    total_count = session.exec(select(func.count(ProductOrder.id))).one()
+
+    offset = (page - 1) * limit
+    query = query.offset(offset).limit(limit).order_by(desc(ProductOrder.created_at))
     orders = session.exec(query).all()
-    
+
     return {
         "total": total_count,
-        "skip": skip,
+        "page": page,
         "limit": limit,
-        "orders": [
+        "items": [
             {
                 "id": o.id,
                 "shop_id": o.shop_id,
