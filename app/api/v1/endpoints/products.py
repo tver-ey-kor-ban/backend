@@ -7,8 +7,12 @@ from app.db import get_session
 from app.models.product import Product, ProductCreate, ProductRead
 from app.core.security import TokenData
 from app.core.dependencies import require_shop_owner, require_shop_member
+from app.services.image_storage_service import ImageStorageService
 
 router = APIRouter(tags=["products"])
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 # Helper function to get products query
@@ -128,6 +132,49 @@ def delete_product(
     product.is_active = False
     session.commit()
     return {"message": "Product deleted successfully"}
+
+
+@router.post("/shops/{shop_id}/products/{product_id}/image", response_model=ProductRead)
+def upload_product_image(
+    shop_id: int,
+    product_id: int,
+    image: UploadFile = File(...),
+    current_user: TokenData = Depends(require_shop_owner),
+    session: Session = Depends(get_session)
+):
+    """Upload or replace the image for a product.
+
+    Send as **multipart/form-data** with an `image` field (JPEG / PNG / WebP, max 5 MB).
+    The stored URL is returned in `image_url` and is ready to be forwarded to the
+    image-search service for embedding generation.
+    """
+    statement = select(Product).where(
+        Product.id == product_id,
+        Product.shop_id == shop_id,
+        Product.is_active
+    )
+    product = session.exec(statement).first()
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+    if image.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported image type '{image.content_type}'. Use JPEG, PNG or WebP.",
+        )
+    raw = image.file.read()
+    if len(raw) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image must be smaller than 5 MB.",
+        )
+
+    result = ImageStorageService().upload(raw, folder="products")
+    product.image_url = result["image_url"]
+    product.thumbnail_url = result["thumbnail_url"]
+    session.commit()
+    session.refresh(product)
+    return product
 
 
 # Product search and filter endpoints

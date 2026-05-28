@@ -1,7 +1,9 @@
 import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db, get_session
 from app.api.v1.endpoints import auth, shops, products, services, vehicles, categories, customers, customer_vehicles, product_orders, mechanic_bookings, mechanic_performance, ratings, admin, quotations, repair_progress, invoices, chat, search
@@ -141,6 +143,10 @@ app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 
 # Include global search route
 app.include_router(search.router, prefix="/api/v1", tags=["search"])
+
+
+os.makedirs("uploads/avatars", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.get("/")
