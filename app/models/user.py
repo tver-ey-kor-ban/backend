@@ -18,6 +18,8 @@ class UserBase(SQLModel):
     email: str = Field(unique=True, index=True)
     username: str = Field(unique=True, index=True)
     full_name: Optional[str] = None
+    phone: Optional[str] = None
+    profile_image_url: Optional[str] = None
     is_active: bool = True
     is_superuser: bool = False
     roles: str = Field(default="user", sa_type=String)  # Comma-separated roles
@@ -95,6 +97,14 @@ class RefreshToken(SQLModel, table=True):
     
     # Relationship to user
     user: User = Relationship(back_populates="refresh_tokens")
+
+
+class UserUpdate(SQLModel):
+    """Editable fields for the current user's own profile."""
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    profile_image_url: Optional[str] = None
 
 
 class RefreshTokenCreate(SQLModel):

@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from app.models.user import User, UserCreate, RefreshToken
+from app.models.user import User, UserCreate, UserUpdate, RefreshToken
 from app.repositories.user_repository import UserRepository
 from app.core.security import (
     get_password_hash, verify_password, create_access_token, create_refresh_token,
@@ -39,6 +39,9 @@ class AuthService:
             is_superuser=user_data.is_superuser,
         )
         return self.user_repo.save(user)
+
+    def update_profile(self, user: User, data: UserUpdate) -> User:
+        return self.user_repo.update(user, data)
 
     def authenticate_user(self, username: str, password: str) -> Optional[User]:
         user = self.user_repo.get_by_username(username)

@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import Optional, List
 from sqlmodel import Session, select, col
 
-from app.models.user import User, RefreshToken
+from app.models.user import User, RefreshToken, UserUpdate
 
 
 class UserRepository:
@@ -22,6 +23,16 @@ class UserRepository:
         ).first()
 
     def save(self, user: User) -> User:
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
+
+    def update(self, user: User, data: UserUpdate) -> User:
+        update_fields = data.model_dump(exclude_unset=True)
+        for key, value in update_fields.items():
+            setattr(user, key, value)
+        user.updated_at = datetime.utcnow()
         self.session.add(user)
         self.session.commit()
         self.session.refresh(user)

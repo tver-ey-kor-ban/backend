@@ -134,6 +134,19 @@ def delete_category(
 
 # Service-Category recommendation links
 
+@router.get("/service-links")
+def list_service_links(
+    service_id: Optional[int] = None,
+    session: Session = Depends(get_session)
+):
+    """List all service-category recommendation links."""
+    query = select(ServiceCategory).where(ServiceCategory.is_active)
+    if service_id is not None:
+        query = query.where(ServiceCategory.service_id == service_id)
+    links = session.exec(query).all()
+    return links
+
+
 @router.post("/service-links", status_code=status.HTTP_201_CREATED)
 def link_service_to_category(
     link_data: ServiceCategoryCreate,

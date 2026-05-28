@@ -28,7 +28,9 @@ class UserResponse(BaseModel):
     email: str
     username: str
     full_name: str | None
+    phone: str | None = None
+    profile_image_url: str | None = None
     is_active: bool
-    
+
     class Config:
         from_attributes = True
