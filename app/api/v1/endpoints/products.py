@@ -1,5 +1,7 @@
 """Product endpoints - Shop Owner only for write operations."""
 from typing import List, Optional
+import os
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
 from sqlmodel import Session, select
 
@@ -174,6 +176,22 @@ def upload_product_image(
     product.thumbnail_url = result["thumbnail_url"]
     session.commit()
     session.refresh(product)
+
+    # Automatically index the new image in the AI image search service
+    IMAGE_SEARCH_API_URL = os.getenv("IMAGE_SEARCH_API_URL", "http://localhost:8001")
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            files = {"file": (image.filename, raw, image.content_type)}
+            params = {
+                "product_id": product.id,
+                "category": product.category.name if product.category else "Uncategorized"
+            }
+            response = client.post(f"{IMAGE_SEARCH_API_URL}/update-index", files=files, params=params)
+            response.raise_for_status()
+    except Exception as exc:
+        # Log the failure but don't fail the primary upload transaction
+        print(f"Warning: Failed to update image search index for product {product.id}: {exc}")
+
     return product
 
 
@@ -221,30 +239,73 @@ def search_products_by_image(
     current_user: TokenData = Depends(require_shop_member),
     session: Session = Depends(get_session)
 ):
-    """Search products by uploaded image (Visual Search).
-    
-    This is a placeholder for image-based search.
-    In production, you would:
-    1. Upload image to cloud storage
-    2. Generate image embedding using ML model (CLIP, etc.)
-    3. Compare embedding with product image embeddings
-    4. Return most similar products
-    """
-    # TODO: Implement actual image search with ML
-    # For now, return products with images as placeholder
-    
-    products = session.exec(
+    """Search products by uploaded image (Visual Search) using CLIP + FAISS microservice."""
+    image_contents = image.file.read()
+    image.file.seek(0)
+
+    IMAGE_SEARCH_API_URL = os.getenv("IMAGE_SEARCH_API_URL", "http://localhost:8001")
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            files = {"file": (image.filename, image_contents, image.content_type)}
+            response = client.post(f"{IMAGE_SEARCH_API_URL}/image-search", files=files)
+            response.raise_for_status()
+            search_data = response.json()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Image search service is currently unavailable: {exc}"
+        )
+
+    results = search_data.get("results", [])
+    if not results:
+        return {
+            "message": "No matching products found",
+            "uploaded_filename": image.filename,
+            "results": [],
+            "total": 0
+        }
+
+    similarity_map = {res["product_id"]: res["similarity"] for res in results}
+    product_ids = list(similarity_map.keys())
+
+    db_products = session.exec(
         select(Product).where(
+            Product.id.in_(product_ids),
             Product.shop_id == shop_id,
-            Product.is_active,
-            Product.image_url.isnot(None)
+            Product.is_active == True
         )
     ).all()
-    
+
+    search_results = []
+    for product in db_products:
+        prod_dict = {
+            "id": product.id,
+            "shop_id": product.shop_id,
+            "name": product.name,
+            "description": product.description,
+            "price": product.price,
+            "cost": product.cost,
+            "stock_quantity": product.stock_quantity,
+            "sku": product.sku,
+            "is_active": product.is_active,
+            "category_id": product.category_id,
+            "image_url": product.image_url,
+            "thumbnail_url": product.thumbnail_url,
+            "created_at": product.created_at.isoformat() if product.created_at else None,
+            "similarity": similarity_map.get(product.id, 0.0),
+            "category": product.category.name if product.category else None
+        }
+        search_results.append(prod_dict)
+
+    # Sort results by similarity descending
+    search_results.sort(key=lambda x: x["similarity"], reverse=True)
+
     return {
-        "message": "Image search placeholder - returning products with images",
+        "message": "Image search completed successfully",
         "uploaded_filename": image.filename,
-        "results": products[:10]  # Limit results
+        "results": search_results,
+        "total": len(search_results)
     }
 
 

@@ -137,9 +137,10 @@ Body: { "is_active": false }
 
 ## P2 — Nice to Have
 
-### [P2-1] Image search endpoint is a placeholder
+### [P2-1] Image search endpoint (Completed ✅)
 
-`POST /shops/{shop_id}/products/search-by-image` is documented as a placeholder that returns products with images attached rather than performing visual similarity search. Either implement ML-based visual search or remove the endpoint until it is ready. The frontend should hide any UI for this feature in the meantime.
+`POST /shops/{shop_id}/products/search-by-image` is fully implemented and integrated. It forwards query images to the ML microservice (using the CLIP model for feature extraction and FAISS for vector indexing), fetches matching product IDs, filters by the shop, and returns them ordered by similarity score.
+
 
 ---
 

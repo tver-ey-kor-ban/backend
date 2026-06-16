@@ -30,18 +30,21 @@ def create_category(
 @router.get("", response_model=List[ProductCategoryRead])
 def list_categories(
     parent_id: Optional[int] = None,
+    all_levels: bool = False,
     session: Session = Depends(get_session)
 ):
     """List all categories, optionally filtered by parent."""
     query = select(ProductCategory).where(ProductCategory.is_active)
     
-    if parent_id is not None:
-        query = query.where(ProductCategory.parent_id == parent_id)
-    else:
-        # Get only root categories (no parent)
-        query = query.where(ProductCategory.parent_id.is_(None))
+    if not all_levels:
+        if parent_id is not None:
+            query = query.where(ProductCategory.parent_id == parent_id)
+        else:
+            # Get only root categories (no parent)
+            query = query.where(ProductCategory.parent_id.is_(None))
     
     return session.exec(query).all()
+
 
 
 @router.get("/tree", response_model=List[ProductCategoryWithChildren])

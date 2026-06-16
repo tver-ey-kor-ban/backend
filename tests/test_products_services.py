@@ -140,6 +140,133 @@ class TestProductEndpoints:
         )
         assert response.status_code == 200
 
+    def test_search_products_by_image(self, client: TestClient, session: Session, shop_owner, owner_auth_headers, monkeypatch):
+        """Test searching products by image using mocked ML microservice."""
+        shop = Shop(name="Image Search Shop", address="123 St", owner_id=shop_owner.id)
+        session.add(shop)
+        session.commit()
+        session.refresh(shop)
+        
+        # Create UserShop entry for owner
+        user_shop = UserShop(user_id=shop_owner.id, shop_id=shop.id, role=ShopRole.OWNER)
+        session.add(user_shop)
+        
+        # Create products in DB
+        product1 = Product(id=101, name="Compatible Oil Filter", price=25.99, stock_quantity=10, shop_id=shop.id)
+        product2 = Product(id=102, name="Unrelated Brake Pad", price=45.99, stock_quantity=5, shop_id=shop.id)
+        session.add(product1)
+        session.add(product2)
+        session.commit()
+        
+        # Mock httpx.Client.post response
+        class MockResponse:
+            def __init__(self, json_data, status_code=200):
+                self.json_data = json_data
+                self.status_code = status_code
+            
+            def json(self):
+                return self.json_data
+            
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    import httpx
+                    raise httpx.HTTPStatusError("Error", request=None, response=self)
+        
+        import httpx
+        original_post = httpx.Client.post
+
+        def mock_post(self_client, url, *args, **kwargs):
+            if "image-search" in str(url):
+                return MockResponse({
+                    "results": [
+                        {"product_id": 101, "similarity": 0.92},
+                        {"product_id": 102, "similarity": 0.35}
+                    ]
+                })
+            return original_post(self_client, url, *args, **kwargs)
+            
+        monkeypatch.setattr(httpx.Client, "post", mock_post)
+        
+        # Prepare a dummy file
+        files = {"image": ("test.jpg", b"dummy_image_data", "image/jpeg")}
+        
+        response = client.post(
+            f"/api/v1/shops/{shop.id}/products/search-by-image",
+            files=files,
+            headers=owner_auth_headers
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert len(data["results"]) == 2
+        # Check sorting and mapping
+        assert data["results"][0]["id"] == 101
+        assert data["results"][0]["similarity"] == 0.92
+        assert data["results"][1]["id"] == 102
+        assert data["results"][1]["similarity"] == 0.35
+
+    def test_global_search_by_image(self, client: TestClient, session: Session, shop_owner, owner_auth_headers, monkeypatch):
+        """Test searching products globally by image via /api/v1/search/image."""
+        shop = Shop(name="Global Image Search Shop", address="123 St", owner_id=shop_owner.id)
+        session.add(shop)
+        session.commit()
+        session.refresh(shop)
+        
+        # Create products in DB
+        product1 = Product(id=201, name="Compatible Oil Filter", price=25.99, stock_quantity=10, shop_id=shop.id)
+        product2 = Product(id=202, name="Unrelated Brake Pad", price=45.99, stock_quantity=5, shop_id=shop.id)
+        session.add(product1)
+        session.add(product2)
+        session.commit()
+        
+        # Mock httpx.Client.post response
+        class MockResponse:
+            def __init__(self, json_data, status_code=200):
+                self.json_data = json_data
+                self.status_code = status_code
+            
+            def json(self):
+                return self.json_data
+            
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    import httpx
+                    raise httpx.HTTPStatusError("Error", request=None, response=self)
+        
+        import httpx
+        original_post = httpx.Client.post
+
+        def mock_post(self_client, url, *args, **kwargs):
+            if "image-search" in str(url):
+                return MockResponse({
+                    "results": [
+                        {"product_id": 201, "similarity": 0.94},
+                        {"product_id": 202, "similarity": 0.42}
+                    ]
+                })
+            return original_post(self_client, url, *args, **kwargs)
+            
+        monkeypatch.setattr(httpx.Client, "post", mock_post)
+        
+        # Prepare a dummy file
+        files = {"image": ("test.jpg", b"dummy_image_data", "image/jpeg")}
+        
+        response = client.post(
+            f"/api/v1/search/image?shop_id={shop.id}",
+            files=files
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert len(data["results"]) == 2
+        # Check sorting and mapping
+        assert data["results"][0]["id"] == 201
+        assert data["results"][0]["similarity"] == 0.94
+        assert data["results"][1]["id"] == 202
+        assert data["results"][1]["similarity"] == 0.42
+
 
 class TestServiceEndpoints:
     """Test service management endpoints."""

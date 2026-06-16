@@ -1,6 +1,8 @@
 """Global search endpoint — searches products and services across all active shops."""
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, File, UploadFile, HTTPException
 from sqlalchemy import func
+import os
+import httpx
 from sqlmodel import Session, select
 
 from app.db import get_session
@@ -139,3 +141,81 @@ def global_search(
             )
 
     return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@router.post("/image")
+def search_products_by_image(
+    shop_id: int = Query(..., description="The shop ID to search products from"),
+    image: UploadFile = File(...),
+    session: Session = Depends(get_session)
+):
+    """Search products by uploaded image (Visual Search) using CLIP + FAISS microservice (PUBLIC)."""
+    from app.models.product import Product
+
+    image_contents = image.file.read()
+    image.file.seek(0)
+
+    IMAGE_SEARCH_API_URL = os.getenv("IMAGE_SEARCH_API_URL", "http://localhost:8001")
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            files = {"file": (image.filename, image_contents, image.content_type)}
+            response = client.post(f"{IMAGE_SEARCH_API_URL}/image-search", files=files)
+            response.raise_for_status()
+            search_data = response.json()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Image search service is currently unavailable: {exc}"
+        )
+
+    results = search_data.get("results", [])
+    if not results:
+        return {
+            "message": "No matching products found",
+            "uploaded_filename": image.filename,
+            "results": [],
+            "total": 0
+        }
+
+    similarity_map = {res["product_id"]: res["similarity"] for res in results}
+    product_ids = list(similarity_map.keys())
+
+    db_products = session.exec(
+        select(Product).where(
+            Product.id.in_(product_ids),
+            Product.shop_id == shop_id,
+            Product.is_active == True
+        )
+    ).all()
+
+    search_results = []
+    for product in db_products:
+        prod_dict = {
+            "id": product.id,
+            "shop_id": product.shop_id,
+            "name": product.name,
+            "description": product.description,
+            "price": product.price,
+            "cost": product.cost,
+            "stock_quantity": product.stock_quantity,
+            "sku": product.sku,
+            "is_active": product.is_active,
+            "category_id": product.category_id,
+            "image_url": product.image_url,
+            "thumbnail_url": product.thumbnail_url,
+            "created_at": product.created_at.isoformat() if product.created_at else None,
+            "similarity": similarity_map.get(product.id, 0.0),
+            "category": product.category.name if product.category else None
+        }
+        search_results.append(prod_dict)
+
+    # Sort results by similarity descending
+    search_results.sort(key=lambda x: x["similarity"], reverse=True)
+
+    return {
+        "message": "Image search completed successfully",
+        "uploaded_filename": image.filename,
+        "results": search_results,
+        "total": len(search_results)
+    }

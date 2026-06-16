@@ -31,11 +31,26 @@ class ImageStorageService:
           thumbnail_url – 400×400 square-crop URL (no extra upload needed)
           public_id     – Cloudinary public_id (useful for future deletions)
         """
-        if not os.getenv("CLOUDINARY_URL"):
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Image storage is not configured (CLOUDINARY_URL missing).",
-            )
+        import uuid
+        cloudinary_url = os.getenv("CLOUDINARY_URL", "")
+        is_configured = cloudinary_url and "your_api_key" not in cloudinary_url and "your_api_secret" not in cloudinary_url
+        
+        if not is_configured:
+            # Local fallback storage
+            os.makedirs(f"uploads/{folder}", exist_ok=True)
+            filename = f"{uuid.uuid4().hex}.png"
+            filepath = os.path.join("uploads", folder, filename)
+            with open(filepath, "wb") as f:
+                f.write(file_bytes)
+            
+            # Construct the local URL
+            local_url = f"http://localhost:8000/uploads/{folder}/{filename}"
+            return {
+                "image_url": local_url,
+                "thumbnail_url": local_url,
+                "public_id": f"local_{filename}"
+            }
+
         try:
             result = cloudinary.uploader.upload(
                 file_bytes,
